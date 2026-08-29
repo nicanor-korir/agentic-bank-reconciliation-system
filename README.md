@@ -40,6 +40,8 @@ remains a separate, human-authorised step.
 ```bash
 make up      # postgres, weaviate, api, web; applies migrations
 make seed    # generate the seeded dataset, ingest it, build the retrieval index
+make run     # execute a reconciliation run through the graph
+make resume RUN_ID=... SIMULATE=1   # resume a paused run
 make eval    # score the golden set, print the ablation table
 make check   # lint, typecheck, tests
 ```
@@ -50,8 +52,10 @@ API on http://localhost:8000, web on http://localhost:5173.
 
 ## Status
 
-Phase 3 of 6. Deterministic matching, retrieval and the eval harness are in
-place. There is no model adjudication yet.
+Phase 4 of 6. The graph, checkpointing, interrupts, audit chain, cost ceiling
+and exact replay are in place and verified. Tier 3 has not yet made a live
+model call — there is no `ANTHROPIC_API_KEY` in this environment, so
+adjudication quality is unmeasured (`NOTES.md` 4.1).
 
 ```
 Tier 0 only (exact reference)          660/1200   55.0%   precision 1.0000   0 false positives
@@ -69,8 +73,8 @@ Feedback loop, next month's processor lines        0.0000 -> 1.0000 after 32
 | 1 | Stack, migrations, seeded dataset | done |
 | 2 | Tiers 0–1, golden set, `make eval` | done |
 | 3 | Weaviate, Tier 2 candidate generation | done |
-| 4 | LangGraph, Tier 3 adjudication, audit chain | next |
-| 5 | Interrupts, exception queue UI, write-back | |
+| 4 | LangGraph, Tier 3 adjudication, audit chain | done (no API key: see NOTES.md 4.1) |
+| 5 | Interrupts, exception queue UI, write-back | next |
 | 6 | Replay, CAMT.053, demo polish | |
 
 `CLAUDE.md` holds the working contract. `NOTES.md` is the decision log.

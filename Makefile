@@ -8,7 +8,7 @@ GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 GIT_DIRTY := $(shell test -n "$$(git status --porcelain 2>/dev/null)" && echo true || echo false)
 EXEC := $(DC) exec -T -e GIT_SHA=$(GIT_SHA) -e GIT_DIRTY=$(GIT_DIRTY) api
 
-.PHONY: help up down logs ps seed index reset shell test lint typecheck check run eval eval-baseline replay demo
+.PHONY: help up down logs ps seed index reset shell test lint typecheck check run resume eval eval-baseline replay demo
 
 help:
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -59,8 +59,13 @@ typecheck: ## mypy
 
 check: lint typecheck test ## lint + typecheck + test
 
-run: ## (Phase 4) Execute a reconciliation run
-	@echo "not implemented until Phase 4"; exit 1
+PERIOD ?= 2026-06
+
+run: ## Execute a reconciliation run through the graph
+	$(EXEC) recon run --period $(PERIOD)
+
+resume: ## Resume a paused run: make resume RUN_ID=... [SIMULATE=1]
+	$(EXEC) recon resume $(RUN_ID) $(if $(SIMULATE),--simulate-reviewer,)
 
 eval: ## Score the golden set, print the table, write evals/report-<sha>.json
 	$(EXEC) recon eval

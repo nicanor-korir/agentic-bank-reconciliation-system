@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from recon.config import get_settings
 from recon.db import apply_migrations, transaction
@@ -56,6 +57,167 @@ def _cmd_seed(args: argparse.Namespace) -> int:
     apply_migrations()
     _cmd_generate(args)
     return _cmd_ingest(args)
+
+
+def _resolve_mode(settings: Any, mode: str) -> str:
+    if mode != "auto":
+        return mode
+    if settings.anthropic_api_key:
+        return "anthropic"
+    print(
+        "WARNING: ANTHROPIC_API_KEY is not set, so Tier 3 will run with the stub\n"
+        "         adjudicator. It is NOT a model: it commits only exact single\n"
+        "         matches and escalates everything else. It exercises the graph,\n"
+        "         checkpointing, interrupts, audit chain and cost ceiling -- it\n"
+        "         cannot demonstrate judgement, and its output must never be\n"
+        "         reported as model quality.\n"
+    )
+    return "stub"
+
+
+def _print_run(summary: dict[str, Any]) -> None:
+    from recon.llm.pricing import format_micro
+
+    print(f"run {summary['run_id']}  status {summary['status']}")
+    print(f"  bank lines            {summary['bank_lines']}")
+    print(f"  committed             {summary['committed']}  by tier {summary['by_tier']}")
+    print(f"  queued for human      {summary['queued_for_human']}")
+    print(f"  unresolved            {summary['unresolved']}")
+    print(f"  model calls           {summary['llm_calls']}")
+    if summary.get("adjudication_errors"):
+        print(
+            f"  ADJUDICATION ERRORS   {summary['adjudication_errors']} "
+            f"(escalated, never auto-committed)"
+        )
+    print(f"  cost                  {format_micro(summary['cost_micro'])}")
+    if summary.get("halt_reason"):
+        print(f"  HALTED: {summary['halt_reason']}")
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    from recon.graph.runner import start_run
+    from recon.llm.adjudicator import ReplayMissError
+
+    settings = get_settings()
+    mode = _resolve_mode(settings, args.adjudicator)
+    try:
+        summary = start_run(
+            settings,
+            period=args.period,
+            adjudicator_mode=mode,
+            use_retrieval=not args.no_retrieval,
+            replay_of=args.replay_of,
+        )
+    except ReplayMissError as exc:
+        # Non-zero, loudly. A replay that finishes with a longer review queue
+        # instead of failing is the one outcome replay must never produce.
+        print(f"REPLAY FAILED: {exc}")
+        print(
+            "  The recorded run cannot be reproduced because the input to the "
+            "model differs.\n"
+            "  Check for changes to the prompt, the matching config, the "
+            "candidate set, or the\n  underlying ledger data since "
+            f"{args.replay_of}."
+        )
+        return 1
+    _print_run(summary)
+    if summary["status"] == "awaiting_human":
+        print(f"\n  resume with: recon resume {summary['run_id']} --simulate-reviewer")
+    return 0
+
+
+def _cmd_resume(args: argparse.Namespace) -> int:
+    """Resume a paused run with reviewer decisions.
+
+    `--simulate-reviewer` accepts the top candidate for every queued item. It
+    exists so the interrupt/resume path can be exercised end to end; the
+    reviewer is recorded as 'simulated' so nothing downstream can mistake it
+    for a person.
+    """
+    import json
+
+    from recon.graph.runner import resume_run
+
+    settings = get_settings()
+    if args.resolutions:
+        resolutions = json.loads(Path(args.resolutions).read_text())
+    elif args.simulate_reviewer:
+        from recon.db import connect
+
+        with connect() as conn:
+            row = conn.execute(
+                "select payload from events where run_id = %s and node = 'tier3_adjudicate' "
+                "order by seq desc limit 1",
+                (args.run_id,),
+            ).fetchone()
+        _ = row
+        resolutions = _simulated_resolutions(settings, args.run_id)
+    else:
+        print("provide --resolutions FILE or --simulate-reviewer")
+        return 2
+
+    summary = resume_run(settings, args.run_id, resolutions)
+    _print_run(summary)
+    return 0
+
+
+def _simulated_resolutions(settings: Any, run_id: str) -> list[dict[str, Any]]:
+    """Accept the top-ranked candidate for each queued item."""
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    from recon.graph.build import build_graph
+    from recon.graph.nodes import Deps
+    from recon.graph.runner import build_index, choose_adjudicator, load_prompt
+    from recon.llm.adjudicator import CostMeter
+
+    prompt, _ = load_prompt()
+    index, closer = build_index(settings, False)
+    deps = Deps(
+        settings,
+        index,
+        choose_adjudicator(settings, "stub"),
+        prompt,
+        CostMeter(settings.match.run_cost_ceiling_micro),
+    )
+    try:
+        with PostgresSaver.from_conn_string(settings.database_url) as cp:
+            graph = build_graph(deps, cp)
+            snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
+            interrupts = getattr(snapshot, "interrupts", ()) or ()
+            queue = (
+                (getattr(interrupts[0], "value", {}) or {}).get("queue", []) if interrupts else []
+            )
+    finally:
+        if closer is not None:
+            closer.__exit__(None, None, None)
+
+    out: list[dict[str, Any]] = []
+    for item in queue:
+        candidates = item.get("candidates") or []
+        if not candidates:
+            out.append(
+                {
+                    "bank_ref": item["bank_ref"],
+                    "action": "reject",
+                    "reviewer": "simulated",
+                    "note": "No candidate offered.",
+                }
+            )
+            continue
+        top = candidates[0]
+        out.append(
+            {
+                "bank_ref": item["bank_ref"],
+                "action": "approve",
+                "reviewer": "simulated",
+                "ledger_entry_ids": top["ledger_entry_ids"],
+                "doc_refs": top["doc_refs"],
+                "note": (
+                    f"Accepted {', '.join(top['doc_refs']) or 'candidate'} (simulated reviewer)."
+                ),
+            }
+        )
+    return out
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
@@ -135,6 +297,21 @@ def main(argv: list[str] | None = None) -> int:
     seed.add_argument("--out", help="output directory (default: RECON_DATA_DIR)")
     seed.add_argument("--dir", help=argparse.SUPPRESS)
     seed.set_defaults(fn=_cmd_seed)
+
+    rn = sub.add_parser("run", help="execute a reconciliation run through the graph")
+    rn.add_argument("--period", default="2026-06")
+    rn.add_argument(
+        "--adjudicator", default="auto", choices=("auto", "anthropic", "stub", "recorded")
+    )
+    rn.add_argument("--replay-of", help="run id whose recorded model calls to replay")
+    rn.add_argument("--no-retrieval", action="store_true")
+    rn.set_defaults(fn=_cmd_run)
+
+    rs = sub.add_parser("resume", help="resume a paused run with reviewer decisions")
+    rs.add_argument("run_id")
+    rs.add_argument("--resolutions", help="JSON file of reviewer decisions")
+    rs.add_argument("--simulate-reviewer", action="store_true")
+    rs.set_defaults(fn=_cmd_resume)
 
     idx = sub.add_parser("index", help="index open ledger entries into Weaviate")
     idx.add_argument("--rebuild", action="store_true", help="clear the tenant index first")

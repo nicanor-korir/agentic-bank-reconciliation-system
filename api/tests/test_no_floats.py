@@ -15,11 +15,21 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src" / "recon"
 GUARDED = ("db", "ingest", "matching", "seed", "graph", "retrieval", "llm")
 
-# Weaviate returns relevance as a float. That conversion happens once, at the
-# boundary, and the result is integer per mille from there on -- so this is the
-# only module in the whole retrieval/matching path allowed a float literal.
-# `test_no_float_touches_a_money_value` still applies to it.
-SCORE_MODULES = {"weaviate_index.py"}
+# Modules that sit on an external boundary where floats genuinely arrive:
+# Weaviate returns relevance as a float, and the model returns confidence as a
+# JSON number. Each converts once, at the edge, into an integer or a Decimal.
+# They are exempt from the blanket ban and NOT from
+# `test_no_float_touches_a_money_value`, which is the rule that actually
+# protects money.
+BOUNDARY_MODULES = {
+    "retrieval/weaviate_index.py",
+    "llm/adjudicator.py",
+    "llm/schema.py",
+}
+
+
+def _rel(path: Path) -> str:
+    return str(path.relative_to(SRC))
 
 
 def _guarded_files() -> list[Path]:
@@ -48,7 +58,7 @@ def _has_float(node: ast.AST) -> bool:
     return False
 
 
-@pytest.mark.parametrize("path", _guarded_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _guarded_files(), ids=_rel)
 def test_no_float_touches_a_money_value(path: Path):
     """The invariant that matters, checked everywhere including score modules.
 
@@ -68,10 +78,10 @@ def test_no_float_touches_a_money_value(path: Path):
     assert not offences, "\n".join(offences)
 
 
-@pytest.mark.parametrize("path", _guarded_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _guarded_files(), ids=_rel)
 def test_no_floats_in_monetary_paths(path: Path):
-    if path.name in SCORE_MODULES:
-        pytest.skip("relevance scores are floats; covered by the *_minor test above")
+    if _rel(path) in BOUNDARY_MODULES:
+        pytest.skip("external float boundary; covered by the *_minor test above")
     tree = ast.parse(path.read_text())
     offences: list[str] = []
     for node in ast.walk(tree):
@@ -86,7 +96,7 @@ def test_no_floats_in_monetary_paths(path: Path):
     assert not offences, "\n".join(offences)
 
 
-@pytest.mark.parametrize("path", _guarded_files(), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _guarded_files(), ids=_rel)
 def test_no_wall_clock_in_decision_logic(path: Path):
     """NON-NEGOTIABLE #4: date windows are relative to value_date, never today().
 

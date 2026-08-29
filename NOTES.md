@@ -683,3 +683,102 @@ a retrieval defect, and every one presented as "retrieval cannot find it".
 `LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku, the $2.00 ceiling,
 multi-currency. New: `hybrid_alpha` is set by argument rather than by sweep —
 worth one eval sweep in Phase 4 now that the harness supports it.
+
+---
+
+# Phase 4 — LangGraph + Tier 3
+
+Status: **complete, with one deliverable blocked.** 220 tests, `ruff` and
+`mypy --strict` clean. Built against langgraph 1.2.11,
+langgraph-checkpoint-postgres 3.1.2, anthropic 1.2.0 — signatures checked with
+`inspect`, not recalled.
+
+## 4.1 Blocked: no `ANTHROPIC_API_KEY`
+
+There is no API key in this environment, so **Tier 3 has never made a live model
+call** and there is no measured adjudication quality — no Tier 3 precision, no
+real cost figure, no p50/p95 latency. Everything else in the phase is built and
+verified.
+
+The architecture absorbs this better than most would, because record-and-replay
+was already the design (0.4a): Tier 3 is a recording lookup by request hash, and
+the live client is a thin transport over a pure request builder. Concretely:
+
+- `AnthropicAdjudicator` is written and typed but unexercised.
+- `RecordedAdjudicator` is exercised and is the path replay uses.
+- `StubAdjudicator` is **not a model**. It commits only when exactly one
+  candidate matches the payment exactly and escalates everything else. It exists
+  so the graph, checkpointing, interrupts, audit chain and cost ceiling can be
+  verified end to end. `runs.config_snapshot.adjudicator` records which one ran,
+  so no report can mistake a stub run for a model run.
+
+**What I need:** an `ANTHROPIC_API_KEY` with access to `claude-sonnet-5`. One
+run over the 212 escalated lines costs roughly $0.90 at list rates. With it, the
+eval gains a real Tier 3 arm and the demo gains genuine rationales.
+
+## 4.2 Verified end to end (stub adjudicator, real everything else)
+
+| Claim | Evidence |
+|---|---|
+| Graph runs the whole month | 1,200 lines → 1,015 committed (660/328/27 by tier), 185 queued |
+| `interrupt()` pauses the run | status `awaiting_human`, checkpoint persisted to Postgres |
+| `Command(resume=...)` continues it | 185 human decisions applied, 0 unresolved, status `completed` |
+| Human decisions supersede, never overwrite | 185 rows with `supersedes_id` set; the escalation stays in the table |
+| Audit chain | verifies intact; tampering with one event payload reports `BROKEN at event index 2` |
+| Cost ceiling halts the graph | ceiling of $0 → status `halted_cost`, 0 calls, reason recorded |
+| Model calls are recorded | 212 rows in `llm_calls`, keyed by request hash |
+| **Replay is exact** | replay of a stored run: **1,015 of 1,015 decisions identical, 0 differing**, served entirely from recordings with no live call |
+| **Replay fails when inputs drift** | same replay with retrieval disabled → `REPLAY FAILED`, exit code 1 |
+
+The replay numbers are demo point 7, and they hold for the deterministic tiers
+regardless of which adjudicator produced the recordings.
+
+## 4.3 Two bugs worth recording
+
+**`Usage` had no `__dict__`.** It is a `slots=True` dataclass, so
+`usage.__dict__` raised on every adjudication. All 212 calls failed, each was
+caught and escalated — and the run reported *"212 queued for human, 0 model
+calls"*, which is exactly what a correctly cautious model would look like. The
+failure was invisible because failing safe and failing completely produce the
+same summary. The node now counts adjudication errors separately and prints
+them; `asdict()` fixed the cause.
+
+**A replay miss used to escalate.** Falling back to the human queue meant a
+replay whose inputs had drifted would finish "successfully" with a longer review
+queue — the one outcome replay exists to disprove. `ReplayMissError` now
+propagates out of the node and exits non-zero with a diagnostic naming the
+likely causes.
+
+## 4.4 Design decisions
+
+- **Tiers 0 and 1 share one node.** They share a `claimed` set, and splitting
+  them would mean checkpointing that set as graph state for no benefit.
+- **Only Tier 3 fans out**, at concurrency 8, with the cost checked *before*
+  each call. Results are re-sorted by bank line id so completion order cannot
+  leak into decisions.
+- **One interrupt for the batch, not one per item.** This is a batch graph; 185
+  separate pauses would mean 185 checkpoint round-trips to clear one month.
+- **Decisions and their audit event are written in one transaction.** A decision
+  without its event, or an event describing a rolled-back decision, is worse
+  than either failing.
+- **The event log reloads its tail from the database** rather than trusting an
+  in-memory `prev_hash`. A run resumes in a different process after an
+  interrupt, and a stale head produces a chain that verifies in one process and
+  fails everywhere else.
+- **Candidates are offered under opaque handles (`C1`, `C2`)**, never ledger
+  ids. The model should decide on evidence; a database id invites
+  pattern-matching on numbers that mean nothing.
+- **Cost is integer nano-USD.** A ceiling that halts a run is a decision, and
+  decisions are not made on floats. An unpriced model raises rather than
+  defaulting to zero.
+- **The prompt is a versioned file**, and `prompt_version` is its content hash,
+  so an edit is a new version without anyone remembering to bump it.
+- **`request_hash` covers the whole body** — model, prompt, tools, payload — so
+  a changed prompt is a different call rather than a silent reuse of an answer
+  given to a different question.
+
+## 4.5 Still open
+
+`LEDGER_SOURCE`, `DEMO_DATE`, dropping Haiku (still recommended; nothing in the
+cascade calls it), multi-currency, and an `hybrid_alpha` sweep. New and
+blocking a deliverable: the API key above.

@@ -93,7 +93,8 @@ Phase 1 targets are live. Later ones are declared in the Makefile and fail with 
 | `make down` / `make reset` | Stop the stack / stop and destroy data |
 | `make eval` | Score the golden set, print the ablation + retrieval tables, write `evals/report-<git_sha>.json` |
 | `make eval-baseline` | Score and record the result as the regression baseline |
-| `make run FILE=...` | Execute a reconciliation run through the graph (Phase 4) |
+| `make run [PERIOD=2026-06]` | Execute a reconciliation run through the graph |
+| `make resume RUN_ID=... [SIMULATE=1]` | Resume a paused run with reviewer decisions |
 | `make replay RUN_ID=...` | Re-run a stored run; strict diff, non-zero exit on any divergence (Phase 6) |
 | `make demo` | Full seeded demo scenario, one command (Phase 6) |
 

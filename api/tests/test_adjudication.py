@@ -137,10 +137,9 @@ def test_match_must_name_exactly_one_candidate(ids):
         validate(_payload(candidate_ids=ids), {"C1", "C2"})
 
 
-@pytest.mark.parametrize("decision", ["no_match", "insufficient_evidence"])
-def test_declining_must_not_name_candidates(decision):
-    with pytest.raises(InvalidAdjudicationError, match="must not name"):
-        validate(_payload(decision=decision, candidate_ids=["C1"]), {"C1"})
+# `no_match` naming a candidate is covered by
+# test_no_match_may_not_name_a_candidate below; `insufficient_evidence` is now
+# allowed to name the candidates in contention.
 
 
 def test_an_empty_rationale_is_rejected():
@@ -255,3 +254,66 @@ def test_a_replay_miss_fails_and_never_falls_back_to_a_live_call():
     with pytest.raises(ReplayMissError, match="input to the model changed"):
         _adjudicate(recorded, candidate_set(single()))
     assert len(recorded.misses) == 1
+
+
+def test_the_tool_schema_carries_no_numeric_bounds():
+    """Strict tool use rejects `minimum`/`maximum` on a number outright.
+
+    Caught only by a live call: every unit test passed against a schema the API
+    refuses with a 400.
+    """
+    from recon.llm.schema import ADJUDICATION_SCHEMA
+
+    for name, spec in ADJUDICATION_SCHEMA["properties"].items():
+        assert "minimum" not in spec, f"{name} carries an unsupported bound"
+        assert "maximum" not in spec, f"{name} carries an unsupported bound"
+
+
+@pytest.mark.parametrize("value", [-0.1, 1.5, 42])
+def test_a_confidence_outside_zero_to_one_is_rejected(value):
+    """The bound moved out of the schema, so it has to hold here.
+
+    A confidence above 1 compared against the auto-commit threshold would
+    silently decide to commit.
+    """
+    with pytest.raises(InvalidAdjudicationError, match="outside"):
+        validate(_payload(confidence=value), {"C1"})
+
+
+@pytest.mark.parametrize("value", [0, 0.5, 1])
+def test_the_endpoints_of_the_range_are_accepted(value):
+    assert validate(_payload(confidence=value), {"C1"})["confidence_decimal"] is not None
+
+
+def test_insufficient_evidence_may_name_the_candidates_in_contention():
+    """Which two could not be separated is useful to a reviewer.
+
+    Safe because `insufficient_evidence` is not committable, so naming them
+    recommends nothing. Rejecting this was the contract being wrong, not the
+    model -- it accounted for 48 of 212 lines failing on the first live run.
+    """
+    result = validate(
+        _payload(decision="insufficient_evidence", candidate_ids=["C1", "C2"]),
+        {"C1", "C2"},
+    )
+    assert result["decision"] == "insufficient_evidence"
+    assert result["candidate_ids"] == ["C1", "C2"]
+
+
+def test_a_contended_candidate_is_still_never_committable():
+    from recon.llm.schema import COMMITTABLE
+
+    assert "insufficient_evidence" not in COMMITTABLE
+    assert "no_match" not in COMMITTABLE
+
+
+def test_no_match_may_not_name_a_candidate():
+    """Naming one while asserting nothing matches is a contradiction, and it
+    would reach a reviewer as a recommendation."""
+    with pytest.raises(InvalidAdjudicationError, match="contradiction"):
+        validate(_payload(decision="no_match", candidate_ids=["C1"]), {"C1"})
+
+
+def test_candidates_named_in_contention_must_still_have_been_offered():
+    with pytest.raises(InvalidAdjudicationError, match="not offered"):
+        validate(_payload(decision="insufficient_evidence", candidate_ids=["C9"]), {"C1"})

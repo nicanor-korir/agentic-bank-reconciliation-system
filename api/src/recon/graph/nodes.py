@@ -319,6 +319,12 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                 "calls": deps.meter.calls,
                 "cost_micro": deps.meter.spent_micro,
                 "escalated": len(queue),
+                # Recorded in the audit trail, not just printed. A systematic
+                # adjudication failure escalates everything, which is
+                # indistinguishable from a cautious model unless the count is
+                # written down where somebody will see it later.
+                "adjudication_errors": len(errors),
+                "first_errors": errors[:5],
                 "halt_reason": halt_reason,
             },
         )

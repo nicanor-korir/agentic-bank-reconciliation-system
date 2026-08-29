@@ -70,11 +70,11 @@ resume: ## Resume a paused run: make resume RUN_ID=... [SIMULATE=1]
 continue: ## Resume a run whose process died: make continue RUN_ID=...
 	$(EXEC) recon resume $(RUN_ID) --continue
 
-eval: ## Score the golden set, print the table, write evals/report-<sha>.json
-	$(EXEC) recon eval
+eval: ## Score the golden set; add RUN=<id> to score that run's full cascade
+	$(EXEC) recon eval $(if $(RUN),--run $(RUN),)
 
 eval-baseline: ## Score and record the result as the regression baseline
-	$(EXEC) recon eval --set-baseline
+	$(EXEC) recon eval --set-baseline $(if $(RUN),--run $(RUN),)
 
 replay: ## Replay a stored run and diff it: make replay RUN_ID=...
 	$(EXEC) recon replay $(RUN_ID)

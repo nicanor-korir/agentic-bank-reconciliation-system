@@ -51,7 +51,11 @@ class MatchConfig(BaseModel):
     # Tier 3 adjudication
     tier3_autocommit_confidence: Decimal = Decimal("0.900")
     tier3_concurrency: int = 8
-    run_cost_ceiling_micro: int = 2_000_000  # $2.00, halts the graph (NOTES.md 0.5.5)
+    # $3.00. Set from measurement, not a guess: a live 1,200-line month costs
+    # $1.52 at list rates with prompt caching working, so $2.00 left only 31%
+    # headroom and would trip on a slightly larger batch. The ceiling exists to
+    # stop a runaway, not to fail a normal month.
+    run_cost_ceiling_micro: int = 3_000_000
 
     model_version: str = "claude-sonnet-5"
 

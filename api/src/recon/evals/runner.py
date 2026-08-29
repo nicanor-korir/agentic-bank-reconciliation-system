@@ -20,6 +20,7 @@ from recon.evals.ablation import ARMS, run_arm
 from recon.evals.golden import GoldenCase, load_all_cases, load_golden
 from recon.evals.metrics import Report, score
 from recon.evals.retrieval_metrics import score_retrieval
+from recon.evals.run_scoring import score_run
 from recon.matching import run_deterministic
 from recon.matching.tier2_candidates import generate as generate_candidates
 from recon.matching.types import BankLine, LedgerEntry
@@ -76,7 +77,7 @@ def _fmt(value: float | None, spec: str = ".4f") -> str:
     return "n/a" if value is None else format(value, spec)
 
 
-def run_eval(settings: Settings) -> dict[str, Any]:
+def run_eval(settings: Settings, run_id: str | None = None) -> dict[str, Any]:
     data_dir = Path(settings.recon_data_dir)
     cases = load_golden(data_dir)
     all_cases = load_all_cases(data_dir, DEMO_PERIOD)
@@ -112,6 +113,14 @@ def run_eval(settings: Settings) -> dict[str, Any]:
     retrieval = _run_retrieval_arms(settings, lines, entries, all_cases)
     feedback = _run_feedback_arm(settings, entries)
 
+    # The full cascade is scored from a real run's committed decisions rather
+    # than simulated: Tier 3 costs money and its answers are recorded, not
+    # recomputed.
+    cascade: dict[str, Any] | None = None
+    if run_id:
+        with connect() as conn:
+            cascade = score_run(conn, run_id, cases, all_cases)
+
     return {
         "git_sha": settings.git_sha,
         "git_dirty": settings.git_dirty,
@@ -124,6 +133,7 @@ def run_eval(settings: Settings) -> dict[str, Any]:
         "arms": [r.as_dict() for r in results],
         "retrieval": retrieval,
         "feedback_loop": feedback,
+        "full_cascade": cascade,
     }
 
 
@@ -376,6 +386,58 @@ def print_report(payload: dict[str, Any]) -> None:
         if misses:
             print(f"  missed by class        {misses}")
 
+    cascade = payload.get("full_cascade")
+    if cascade:
+        print(
+            f"\nFull cascade -- run {cascade['run_id'][:8]} "
+            f"({cascade['adjudicator']}, {cascade['model_version']})"
+        )
+        g, f = cascade["golden"], cascade["full_population"]
+        print(f"  {'population':<22} {'prec':>7} {'recall':>7} {'FP':>4}")
+        print(
+            f"  {'full month (1200)':<22} {_fmt(f['precision']):>7} "
+            f"{_fmt(f['recall']):>7} {f['false_positives']:>4}"
+        )
+        print(
+            f"  {'golden set (300)':<22} {_fmt(g['precision']):>7} "
+            f"{_fmt(g['recall']):>7} {g['false_positives']:>4}"
+        )
+        print(f"\n  {'tier':<8} {'committed':>10} {'correct':>8} {'wrong':>6} {'precision':>10}")
+        for tier, stats in cascade["by_tier"].items():
+            print(
+                f"  tier {tier:<3} {stats['committed']:>10} {stats['correct']:>8} "
+                f"{stats['false_positives']:>6} {_fmt(stats['precision']):>10}"
+            )
+        print(f"\n  model calls            {cascade['model_calls']}")
+        print(
+            f"  tokens                 {cascade['input_tokens']:,} in / "
+            f"{cascade['output_tokens']:,} out"
+        )
+        print(
+            f"  cost                   ${cascade['cost_micro'] / 1e6:,.4f} "
+            f"(${cascade['cost_micro_per_1000_lines'] / 1e6:,.4f} per 1,000 lines)"
+        )
+        print(
+            f"  latency                p50 {cascade['latency_p50_ms']} ms, "
+            f"p95 {cascade['latency_p95_ms']} ms"
+        )
+        if cascade.get("cache_hit_rate") is not None:
+            print(
+                f"  prompt cache           {cascade['cache_hit_rate']:.1%} of "
+                f"input tokens served from cache"
+            )
+        if cascade.get("decision_mix"):
+            mix = ", ".join(f"{k}={v}" for k, v in cascade["decision_mix"].items())
+            print(f"  model answered         {mix}")
+        wrong = f["wrong_commits"]
+        if wrong:
+            print(f"\n  {len(wrong)} WRONG COMMIT(S) by the full cascade:")
+            for w in wrong[:10]:
+                print(
+                    f"    {w['bank_ref']} [{w['case_class']}] tier {w['tier']}: "
+                    f"expected {w['expected_doc_refs']}, committed {w['actual_doc_refs']}"
+                )
+
     fb = payload.get("feedback_loop") or {}
     if fb.get("available"):
         before, after = fb["before"], fb["after"]
@@ -412,7 +474,15 @@ def check_regression(payload: dict[str, Any], evals_dir: Path) -> list[str]:
     final = payload["arms"][-1]["golden"]
     population = payload["arms"][-1]["full_population"]
 
-    for label, block in (("golden set", final), ("full month", population)):
+    checks = [("golden set", final), ("full month", population)]
+    cascade = payload.get("full_cascade")
+    if cascade:
+        checks += [
+            ("full cascade, golden set", cascade["golden"]),
+            ("full cascade, full month", cascade["full_population"]),
+        ]
+
+    for label, block in checks:
         if block["false_positives"] > 0:
             failures.append(
                 f"{block['false_positives']} false positive(s) on the {label}; "

@@ -32,7 +32,9 @@ Amounts are integer minor units (cents). Never do decimal arithmetic on them.
   correct examples.
 - `insufficient_evidence` — a candidate might be right, but the evidence does
   not settle it. Two candidates equally consistent with the payment is the
-  usual case, and it always means this answer.
+  usual case, and it always means this answer. You may list the candidate ids
+  that could not be separated; a reviewer is helped by knowing which two were
+  tied. Nothing you name here is committed.
 
 Evidence that genuinely supports a match:
 - The payment amount equals the item, or differs by an amount the narrative

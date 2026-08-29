@@ -259,7 +259,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     settings = get_settings()
     evals_dir = Path(args.evals_dir or settings.recon_evals_dir)
 
-    payload = run_eval(settings)
+    payload = run_eval(settings, run_id=args.run)
     print_report(payload)
     path = write_report(payload, evals_dir)
     print(f"report: {path}")
@@ -343,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ev = sub.add_parser("eval", help="score the golden set and write a report")
     ev.add_argument("--evals-dir", help="report directory (default: RECON_EVALS_DIR)")
+    ev.add_argument("--run", help="also score this completed run's decisions as the full cascade")
     ev.add_argument(
         "--set-baseline",
         action="store_true",

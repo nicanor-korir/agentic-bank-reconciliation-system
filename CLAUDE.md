@@ -82,12 +82,14 @@ Before using any LangGraph or Weaviate API, check the installed version's actual
 
 ## Commands
 
-None of these exist yet — build them as the phases land, and keep this list accurate.
+Phase 1 targets are live. Later ones are declared in the Makefile and fail with a one-line message until their phase lands. Keep this list accurate as phases land.
 
 | Command | Purpose |
 |---|---|
-| `make up` | docker-compose: postgres, weaviate, api, web (Phase 1) |
-| `make seed` | Generate seeded synthetic data — 1,200 bank lines + ledger for one month, hard cases planted at known positions (Phase 1) |
+| `make up` | Bring up postgres, weaviate, api, web and apply migrations |
+| `make seed` | Generate the seeded dataset (1,200 + 200 lines over two periods, hard cases planted) and ingest it |
+| `make check` | lint + typecheck + tests |
+| `make down` / `make reset` | Stop the stack / stop and destroy data |
 | `make eval` | Run the golden set; print the metrics table, write `evals/report-<git_sha>.json` (Phase 2) |
 | `make run FILE=...` | Execute a reconciliation run through the graph (Phase 4) |
 | `make replay RUN_ID=...` | Re-run a stored run; strict diff, non-zero exit on any divergence (Phase 6) |

@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Generated dataset (reproducible from `make seed`)
+/data/
+.env

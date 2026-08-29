@@ -351,3 +351,118 @@ The generator emits **two** statement periods, not one:
 - `2026-07` — a ~200-line follow-up month containing the same messy-narrative counterparties.
 
 Without the second period there is nothing to re-run after a human correction, and demo beats 8–9 cannot be shown. This is the Phase 1 fix for 0.4e.
+
+---
+
+# Phase 1 — Skeleton + data
+
+Status: **complete, awaiting approval**. `make up` and `make seed` work end to
+end; lint, typecheck and tests are clean.
+
+## 1.1 What landed
+
+- `docker-compose.yml`: postgres 16, weaviate 1.34, api, web. Weaviate is unused
+  until Phase 3 but present now so `make up` never has to change shape.
+- `001_init.sql`: the full schema from 0.2, including `llm_calls`.
+- Ingest: a `StatementParser` protocol with CSV implementations, strict
+  normalisation, and an idempotent loader.
+- Seeded generator producing two periods and a manifest that doubles as the
+  golden-set label file.
+- 67 tests, `ruff` and `mypy --strict` clean.
+
+## 1.2 The brief's numbers cannot all hold at once
+
+`PROMPT.md` states three figures that are mutually inconsistent on a
+1,200-line month:
+
+| Source | Figure |
+|---|---|
+| Cascade spec, Tier 0 | clears 40–60% |
+| "Done" criteria | ~70–85% auto-matched |
+| Demo script, beat 4 | ~140 model calls |
+
+140 model calls out of 1,200 means the deterministic tiers cleared ~88%, which
+is above the 70–85% band. Conversely, holding auto-match at 85% leaves ~180
+lines for the model even before Tier 3 escalations to the human queue.
+
+**Resolution taken.** The dataset honours the one figure that is explicit and
+unambiguous — Tier 0 clears **55%**, inside the stated 40–60% band. Tiers 0+1
+clear **80%**, and **20% (240 lines)** reach retrieval and adjudication. The
+demo line becomes *"240 calls, not 1,200"*, which makes the same point.
+
+I read the 70–85% band as **auto-committed vs. routed to a human**, not as
+"cleared by deterministic rules" — that reading is the only one under which the
+brief is self-consistent, since Tier 3 auto-commits also count as auto-matched.
+Phase 2 will produce the real number and it can be revisited against evidence
+rather than arithmetic. Flagging rather than silently picking.
+
+**Cost consequence:** ~240 calls per 1,200 lines at ~1.5K in / 200 out on
+`claude-sonnet-5` is **~$1.00 per 1,000 lines**, up from the ~$0.60 estimated
+in 0.4b, and still well inside the $2.00 per-run ceiling. Prompt caching on the
+system prompt should bring it back down; Phase 4 will measure rather than
+estimate.
+
+## 1.3 Dataset composition (period 2026-06, 1,200 lines)
+
+| Class | Count | Resolved by |
+|---|---|---|
+| `t0_rent_exact` | 480 | Tier 0 |
+| `t0_supplier_exact` | 180 | Tier 0 |
+| `t1_unique_counterparty` | 180 | Tier 1 |
+| `t1_standing_order` | 70 | Tier 1 |
+| `t1_recurring_fee` | 50 | Tier 1 |
+| `h_partial` | 36 | Tier 3 |
+| `h_batch` (1 credit = 6 invoices) | 28 | Tier 3 |
+| `h_fx` (15–45bps drift) | 20 | Tier 3 |
+| `h_dup_amount` | 28 | Tier 4 — `insufficient_evidence` |
+| `h_transposed_ref` | 28 | Tier 3 |
+| `h_fee_netted` | 28 | Tier 3 |
+| `h_no_match` | 20 | Tier 3 — `no_match` |
+| `h_feedback` | 32 | Tier 4, then Tier 2/3 after write-back |
+| `h_narrative_only` | 20 | Tier 3 |
+
+Plus 250 distractor ledger entries with no payment, a third of them `closed`
+(the set that must never be proposed as a candidate). Period `2026-07` adds 200
+lines carrying the same four `h_feedback` counterparties.
+
+## 1.4 Decisions taken during the build
+
+- **Tests live in `api/tests/`, not at the repo root.** The api image only
+  copies `./api`, so root-level tests would not exist inside the container that
+  `make test` runs in.
+- **psycopg3 directly, no ORM.** An ORM sits between the code and `bigint`
+  money columns and is the usual route by which a float reaches a monetary
+  path. Rows are `dict_row` throughout — positional access plus a money column
+  means a column reorder silently becomes a wrong amount.
+- **Append-only enforced by a raising trigger, not a silent `RULE`** (closes
+  0.5.6). A `RULE ... DO INSTEAD NOTHING` drops the write silently, which
+  during development looks identical to a decision that was never made.
+  Verified: `update`/`delete` on `events` both raise.
+- **Two guard tests encode non-negotiables the type system cannot.**
+  `test_no_floats` AST-scans every module under `db/ ingest/ matching/ seed/
+  graph/ retrieval/ llm/` for float literals and `float()` calls (#8), and
+  `test_no_wall_clock` bans `today()`/`now()` in decision paths (#4) — that one
+  fails silently in production, since the run still produces decisions, just
+  different ones tomorrow.
+- **Transposed-reference cases are generated last**, once every real document
+  reference exists, and the mistyped reference is checked against them. A wrong
+  reference that happens to name a real invoice is not a hard case, it is an
+  unresolvable one — Tier 0 would confidently commit the wrong match. Caught by
+  a test, not by inspection.
+- **Dataset composition is asserted, not assumed.** A test fails if Tier 0
+  drifts outside the brief's 40–60% band.
+
+## 1.5 Verified against the running stack
+
+| Non-negotiable | Evidence |
+|---|---|
+| #6 idempotency (file) | Re-running `recon ingest` skips all four files; row counts unchanged. |
+| #6 idempotency (row) | Same rows in a re-ordered file: new source row created, 1,200 read, **0 inserted**, 1,200 deduped. |
+| #5 append-only | `update`/`delete` on `events` both raise `table events is append-only`. |
+| #8 integer money | Every money column is `bigint`; no float or numeric anywhere in a monetary path. |
+
+## 1.6 Still open
+
+Unchanged from 0.5: `LEDGER_SOURCE` confirmation (assumed Xero-shaped CSV),
+`DEMO_DATE`, dropping Haiku (0.4c), the $2.00 cost ceiling (0.5.5), and
+multi-currency scope (0.5.7). None block Phase 2.

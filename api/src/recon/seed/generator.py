@@ -39,9 +39,9 @@ WIRE_FEE_MINOR = 2500  # 25.00 USD, netted off by the remitting bank
 JUNE_MIX: dict[str, int] = {
     "t0_rent_exact": 480,
     "t0_supplier_exact": 180,
-    "t1_unique_counterparty": 180,
+    "t1_unique_counterparty": 224,
     "t1_standing_order": 70,
-    "t1_recurring_fee": 50,
+    "t1_recurring_fee": 6,
     "h_partial": 36,
     "h_batch": 28,
     "h_fx": 20,
@@ -244,7 +244,11 @@ class DatasetGenerator:
             ("CARD ACQUIRING FEE", "Card acquiring fees", 4_250),
         ]
         label, desc, amount = kinds[i % len(kinds)]
-        day = self._day(25, self.days)
+        # Two occurrences per kind, 20 days apart. Identical fees inside one
+        # +/-7 day window are genuinely ambiguous, and Tier 1 would correctly
+        # decline both -- which would be a defect in the dataset, not the
+        # matcher.
+        day = self.start + timedelta(days=(5 if (i // len(kinds)) % 2 == 0 else 25) - 1)
         ref = self._ap_ref()
         return Case(
             "t1_recurring_fee",
@@ -369,10 +373,13 @@ class DatasetGenerator:
         ref = self._ar_ref()
         wrong = self._mistyped_ref(ref)
         paid = issued + timedelta(days=self.rng.randint(0, 3))
+        # Labelled Tier 1, not Tier 3. Measured, not assumed: the structural
+        # rule matches on payer + amount + window and ignores the mistyped
+        # reference entirely, so this never reaches the model. NOTES.md 2.2.
         return Case(
             "h_transposed_ref",
             "match",
-            3,
+            1,
             BankSpec(paid, paid, amount, f"ACH CREDIT RENT {wrong} {name}", name),
             [self._ar_invoice(ref, name, unit, amount, issued)],
             note=f"narrative cites {wrong}, invoice is {ref}",
@@ -698,32 +705,64 @@ def generate(out_dir: Path, seed: int, tenant: str) -> dict[str, Any]:
     return manifest
 
 
+# Every case class gets at least this many golden cases, however rare it is.
+# Found the hard way: a flat sample gave `t1_recurring_fee` (6 instances among
+# 960 clean lines) zero golden coverage, so the recurring-fee rule was being
+# scored by nothing at all.
+MIN_PER_CLASS = 3
+
+
+def _stratified(by_class: dict[str, list[str]], quota: int, rng: random.Random) -> list[str]:
+    """Sample `quota` refs: proportional by class, but never starving one."""
+    names = sorted(by_class)
+    pools = {n: sorted(by_class[n]) for n in names}
+    floor = {n: min(MIN_PER_CLASS, len(pools[n])) for n in names}
+    spare = {n: len(pools[n]) - floor[n] for n in names}
+    budget = quota - sum(floor.values())
+    total_spare = sum(spare.values())
+
+    take = dict(floor)
+    if budget > 0 and total_spare > 0:
+        for n in names:
+            take[n] += min(spare[n], budget * spare[n] // total_spare)
+
+    # Integer division leaves a shortfall; hand it to the classes with the most
+    # unsampled instances so the sample stays closest to the real mix.
+    for _ in range(quota):
+        if sum(take.values()) >= quota:
+            break
+        order = sorted(names, key=lambda n: (-(len(pools[n]) - take[n]), n))
+        for n in order:
+            if take[n] < len(pools[n]):
+                take[n] += 1
+                break
+    while sum(take.values()) > quota:
+        for n in sorted(names, key=lambda n: (-take[n], n)):
+            if take[n] > floor[n]:
+                take[n] -= 1
+                break
+
+    return sorted(r for n in names for r in rng.sample(pools[n], take[n]))
+
+
 def _golden_set(cases: list[dict[str, Any]], seed: int) -> dict[str, Any]:
     """180 clean + 120 hard, drawn from the demo month only.
 
-    All hard classes are represented proportionally rather than sampled flat,
-    so a class with only ten instances cannot be sampled out of existence.
+    Both halves are stratified by case class, so every rule the cascade
+    implements is scored against at least a few labelled lines.
     """
     june = [c for c in cases if c["period"] == "2026-06"]
-    clean = sorted(str(c["bank_ref"]) for c in june if c["case_class"] not in HARD_CLASSES)
     rng = random.Random(f"{seed}:golden")
-    clean_pick = sorted(rng.sample(clean, GOLDEN_CLEAN))
 
-    by_class: dict[str, list[str]] = {}
+    clean_by: dict[str, list[str]] = {}
+    hard_by: dict[str, list[str]] = {}
     for c in june:
-        if c["case_class"] in HARD_CLASSES:
-            by_class.setdefault(str(c["case_class"]), []).append(str(c["bank_ref"]))
-
-    total_hard = sum(len(v) for v in by_class.values())
-    hard_pick: list[str] = []
-    for name in sorted(by_class):
-        refs = sorted(by_class[name])
-        take = max(1, round(len(refs) * GOLDEN_HARD / total_hard))
-        hard_pick.extend(rng.sample(refs, min(take, len(refs))))
-    hard_pick = sorted(hard_pick)[:GOLDEN_HARD]
+        name = str(c["case_class"])
+        target = hard_by if name in HARD_CLASSES else clean_by
+        target.setdefault(name, []).append(str(c["bank_ref"]))
 
     return {
-        "clean": clean_pick,
-        "hard": hard_pick,
-        "counts": {"clean": len(clean_pick), "hard": len(hard_pick)},
+        "clean": _stratified(clean_by, GOLDEN_CLEAN, rng),
+        "hard": _stratified(hard_by, GOLDEN_HARD, rng),
+        "counts": {"clean": GOLDEN_CLEAN, "hard": GOLDEN_HARD},
     }

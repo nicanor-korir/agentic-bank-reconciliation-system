@@ -58,6 +58,37 @@ def _cmd_seed(args: argparse.Namespace) -> int:
     return _cmd_ingest(args)
 
 
+def _cmd_eval(args: argparse.Namespace) -> int:
+    from recon.evals.runner import check_regression, print_report, run_eval, write_report
+
+    settings = get_settings()
+    evals_dir = Path(args.evals_dir or settings.recon_evals_dir)
+
+    payload = run_eval(settings)
+    print_report(payload)
+    path = write_report(payload, evals_dir)
+    print(f"report: {path}")
+
+    failures = check_regression(payload, evals_dir)
+    if args.set_baseline:
+        if failures:
+            print("\nrefusing to set a baseline from a failing run:")
+            for f in failures:
+                print(f"  - {f}")
+            return 1
+        baseline = evals_dir / "baseline.json"
+        baseline.write_text(path.read_text())
+        print(f"baseline: {baseline}")
+        return 0
+
+    if failures:
+        print("REGRESSION:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    return 0
+
+
 def _cmd_stats(_: argparse.Namespace) -> int:
     from recon.app import stats
 
@@ -84,6 +115,15 @@ def main(argv: list[str] | None = None) -> int:
     seed.add_argument("--out", help="output directory (default: RECON_DATA_DIR)")
     seed.add_argument("--dir", help=argparse.SUPPRESS)
     seed.set_defaults(fn=_cmd_seed)
+
+    ev = sub.add_parser("eval", help="score the golden set and write a report")
+    ev.add_argument("--evals-dir", help="report directory (default: RECON_EVALS_DIR)")
+    ev.add_argument(
+        "--set-baseline",
+        action="store_true",
+        help="also write evals/baseline.json, which future runs are checked against",
+    )
+    ev.set_defaults(fn=_cmd_eval)
 
     sub.add_parser("stats", help="row counts for the active tenant").set_defaults(fn=_cmd_stats)
 

@@ -2,9 +2,13 @@
 # message until their phase lands -- better than a confusing stack trace.
 SHELL := /bin/bash
 DC := docker compose
-EXEC := $(DC) exec -T api
+# The api container has no .git mount, and a run that cannot name its own
+# commit cannot claim to be replayable -- so pass it in.
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+GIT_DIRTY := $(shell test -n "$$(git status --porcelain 2>/dev/null)" && echo true || echo false)
+EXEC := $(DC) exec -T -e GIT_SHA=$(GIT_SHA) -e GIT_DIRTY=$(GIT_DIRTY) api
 
-.PHONY: help up down logs ps seed reset shell test lint typecheck check run eval replay demo
+.PHONY: help up down logs ps seed reset shell test lint typecheck check run eval eval-baseline replay demo
 
 help:
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -54,8 +58,11 @@ check: lint typecheck test ## lint + typecheck + test
 run: ## (Phase 4) Execute a reconciliation run
 	@echo "not implemented until Phase 4"; exit 1
 
-eval: ## (Phase 2) Score the golden set
-	@echo "not implemented until Phase 2"; exit 1
+eval: ## Score the golden set, print the table, write evals/report-<sha>.json
+	$(EXEC) recon eval
+
+eval-baseline: ## Score and record the result as the regression baseline
+	$(EXEC) recon eval --set-baseline
 
 replay: ## (Phase 6) Replay a stored run
 	@echo "not implemented until Phase 6"; exit 1

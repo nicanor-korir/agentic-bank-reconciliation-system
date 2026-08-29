@@ -466,3 +466,97 @@ lines carrying the same four `h_feedback` counterparties.
 Unchanged from 0.5: `LEDGER_SOURCE` confirmation (assumed Xero-shaped CSV),
 `DEMO_DATE`, dropping Haiku (0.4c), the $2.00 cost ceiling (0.5.5), and
 multi-currency scope (0.5.7). None block Phase 2.
+
+---
+
+# Phase 2 — Tiers 0-1 + eval harness
+
+Status: **complete**. `make eval` runs; 108 tests, `ruff` and `mypy --strict` clean.
+
+## 2.1 The baseline number
+
+This is the client-deck number, measured on the 1,200-line demo month.
+
+| Arm | Auto-matched | Rate | Precision | Recall | False positives |
+|---|---|---|---|---|---|
+| Tier 0 only (exact reference) | 660 / 1200 | 55.0% | 1.0000 | 0.5729 | **0** |
+| Tiers 0–1 (all deterministic rules) | 988 / 1200 | **82.3%** | **1.0000** | 0.8576 | **0** |
+
+Deterministic rules clear **82.3% of the month with zero AI cost and zero wrong
+commits**, across all 1,200 labelled lines — not a 300-line sample. Tier 0
+alone clears 55%, inside the brief's stated 40–60%.
+
+The 212 lines left over are exactly the classes that need retrieval and
+judgement: partial payments, batched settlements, FX drift, processor-obscured
+payers, narrative-only identification, and the genuinely ambiguous. **Revised
+cost estimate: ~212 model calls per 1,200 lines, ≈$0.88 per 1,000 lines** at
+`claude-sonnet-5` rates before prompt caching — down from the $1.00 projected
+in 1.2, because the deterministic tiers did better than the composition assumed.
+
+Two populations are reported because they answer different questions. The full
+month gives the auto-match rate and the false-positive count. The golden 300 is
+deliberately enriched with hard cases (40% hard, against 20% in the population),
+so its recall of 0.6968 and escalation of 35.7% are *pessimistic by
+construction* — do not quote them as the system's behaviour on real volume.
+
+## 2.2 The transposed-reference case is not hard
+
+Labelled Tier 3 in Phase 1 on the assumption that a mistyped invoice number
+needs a model to untangle. It does not. The Tier 1 structural rule matches on
+payer + amount + 7-day window and never reads the reference at all, so all 28
+instances resolve deterministically at confidence 0.95.
+
+The label is corrected to Tier 1 in the generator. Worth stating plainly because
+it cuts the other way from the usual story: **a whole class of "hard" case
+turned out to need no intelligence at all**, and the eval is what revealed it.
+`expected_tier` is treated as a design expectation throughout, never as ground
+truth — scoring uses `expected_decision` and `expected_doc_refs` only.
+
+## 2.3 The golden set had a hole
+
+The first eval scored `t1_recurring_fee` **zero times**. Six instances among 960
+clean lines, sampled flat at 180, rounds to nothing — so the recurring-fee rule
+shipped with no coverage and the table gave no hint, because a class that is
+absent simply does not appear.
+
+Both halves of the golden set are now stratified by case class with a floor of
+3, so no rule the cascade implements can be scored by nothing. Generalises: a
+sampled eval set silently under-tests exactly the rare paths that rules exist to
+handle.
+
+## 2.4 Design decisions
+
+- **Confidence is `Decimal`, not `float`.** Thresholds moved into `MatchConfig`,
+  which means `matching/` contains no float literal at all and the guard test
+  from Phase 1 covers it without exceptions. It also matches the
+  `numeric(4,3)` column, so no conversion sits between the decision and the
+  audit row.
+- **A claimed ledger entry is invisible to later tiers.** One open item cannot
+  settle two bank lines; tested directly.
+- **An exact amount is never displaced by an FX-tolerated one.** If both exist,
+  the tier declines rather than preferring either. The FX band is 10 bps —
+  tight on purpose, since a wider band stops meaning "the same amount arrived".
+- **Ablation arms name only what exists.** Retrieval and adjudication rows are
+  absent rather than reported as zero: a zero reads as "we tried it and it did
+  nothing".
+- **The regression gate fails on any false positive**, on either population,
+  independently of the precision baseline. Precision ≥ 0.995 and
+  no-regression-vs-baseline are additional gates, not the primary one.
+- **`git_sha` is injected by the Makefile.** The api container has no `.git`
+  mount, and a run that cannot name its own commit cannot claim to be
+  replayable.
+
+## 2.5 An operational note
+
+Changing the generator and re-running `make seed` *adds* a second dataset
+alongside the first rather than replacing it — which is correct idempotent
+behaviour (different content is different content), but it silently doubles the
+population an eval sees. `make reset && make up && make seed` is the right move
+after any generator change. Worth a line in `DEMO.md` in Phase 6.
+
+## 2.6 Still open
+
+Unchanged: `LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku, the $2.00
+ceiling, multi-currency scope. Tier 2 recall@10 (0.4d) becomes measurable in
+Phase 3 and its definition — correct answer present as a single *or* a
+pre-assembled subset — should be re-confirmed against real retrieval numbers.

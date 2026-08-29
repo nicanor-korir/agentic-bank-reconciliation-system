@@ -7,6 +7,8 @@ prove what it was -- so put it here, not in a function default.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,8 +19,13 @@ class MatchConfig(BaseModel):
     model_config = {"frozen": True}
 
     tier0_date_window_days: int = 2
+    tier0_confidence: Decimal = Decimal("1.000")
     tier1_date_window_days: int = 7
-    tier1_confidence: float = 0.95
+    tier1_confidence: Decimal = Decimal("0.950")
+    # An FX-rounded amount is still "equal" for Tier 1 purposes. Kept tight:
+    # anything wider is a genuine ambiguity that belongs downstream.
+    tier1_fx_tolerance_bps: int = 10
+    tier1_fx_confidence: Decimal = Decimal("0.950")
 
     # Tier 2 retrieval
     candidate_limit: int = 10
@@ -29,7 +36,7 @@ class MatchConfig(BaseModel):
     subset_max_pool: int = 60
 
     # Tier 3 adjudication
-    tier3_autocommit_confidence: float = 0.90
+    tier3_autocommit_confidence: Decimal = Decimal("0.900")
     tier3_concurrency: int = 8
     run_cost_ceiling_micro: int = 2_000_000  # $2.00, halts the graph (NOTES.md 0.5.5)
 
@@ -46,7 +53,13 @@ class Settings(BaseSettings):
     recon_tenant: str = "harborview"
     recon_seed: int = 20260601
     recon_data_dir: str = "./data"
+    recon_evals_dir: str = "./evals"
     anthropic_api_key: str = ""
+
+    # Injected by the Makefile: the api container has no .git, and a run that
+    # cannot name its own commit cannot claim to be replayable.
+    git_sha: str = "unknown"
+    git_dirty: bool = True
 
     match: MatchConfig = Field(default_factory=MatchConfig)
 

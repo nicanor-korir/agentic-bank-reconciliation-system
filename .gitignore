@@ -225,3 +225,6 @@ dist/
 # Generated dataset (reproducible from `make seed`)
 /data/
 .env
+
+# Demo assets are committed on purpose -- the README embeds them.
+!docs/*.gif

@@ -1,0 +1,924 @@
+{
+  "arms": [
+    {
+      "auto_match_rate": 0.55,
+      "auto_matched": 660,
+      "cost_micro_per_1000_lines": 0,
+      "full_population": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 28,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 32,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 20,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 36,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 480
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 180
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 6,
+            "true_positive": 0
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 70,
+            "true_positive": 0
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 224,
+            "true_positive": 0
+          }
+        },
+        "committed": 660,
+        "correct_restraint": 48,
+        "escalation_rate": 0.45,
+        "false_positives": 0,
+        "missed": 492,
+        "precision": 1.0,
+        "recall": 0.5729166666666666,
+        "total": 1200,
+        "true_positives": 660,
+        "wrong_commits": []
+      },
+      "golden": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 13,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 17,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 10,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 21,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 89
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 33
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 3,
+            "true_positive": 0
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 14,
+            "true_positive": 0
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 41,
+            "true_positive": 0
+          }
+        },
+        "committed": 122,
+        "correct_restraint": 23,
+        "escalation_rate": 0.5933333333333334,
+        "false_positives": 0,
+        "missed": 155,
+        "precision": 1.0,
+        "recall": 0.4404332129963899,
+        "total": 300,
+        "true_positives": 122,
+        "wrong_commits": []
+      },
+      "key": "tier0",
+      "label": "Tier 0 only (exact reference)",
+      "latency_p50_ms": null,
+      "latency_p95_ms": null,
+      "ms_per_1000_lines": 6.7,
+      "population": 1200,
+      "tier_counts": {
+        "0": 660
+      },
+      "wall_ms": 8.0
+    },
+    {
+      "auto_match_rate": 0.8233333333333334,
+      "auto_matched": 988,
+      "cost_micro_per_1000_lines": 0,
+      "full_population": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 28,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 32,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 20,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 36,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 28
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 480
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 180
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 6
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 70
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 224
+          }
+        },
+        "committed": 988,
+        "correct_restraint": 48,
+        "escalation_rate": 0.17666666666666667,
+        "false_positives": 0,
+        "missed": 164,
+        "precision": 1.0,
+        "recall": 0.8576388888888888,
+        "total": 1200,
+        "true_positives": 988,
+        "wrong_commits": []
+      },
+      "golden": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 13,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 17,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 10,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 21,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 13
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 89
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 33
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 3
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 14
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 41
+          }
+        },
+        "committed": 193,
+        "correct_restraint": 23,
+        "escalation_rate": 0.3566666666666667,
+        "false_positives": 0,
+        "missed": 84,
+        "precision": 1.0,
+        "recall": 0.6967509025270758,
+        "total": 300,
+        "true_positives": 193,
+        "wrong_commits": []
+      },
+      "key": "tier0_1",
+      "label": "Tiers 0-1 (all deterministic rules)",
+      "latency_p50_ms": null,
+      "latency_p95_ms": null,
+      "ms_per_1000_lines": 29.2,
+      "population": 1200,
+      "tier_counts": {
+        "0": 660,
+        "1": 328
+      },
+      "wall_ms": 35.0
+    }
+  ],
+  "config": {
+    "amount_tolerance_bps": 50,
+    "amount_tolerance_floor_minor": 100,
+    "candidate_limit": 10,
+    "hybrid_alpha": 0.4,
+    "model_version": "claude-sonnet-5",
+    "run_cost_ceiling_micro": 3000000,
+    "subset_max_items": 6,
+    "subset_max_pool": 24,
+    "subset_unscoped_max_items": 3,
+    "subset_unscoped_max_pool": 40,
+    "tier0_confidence": "1.000",
+    "tier0_date_window_days": 2,
+    "tier1_confidence": "0.950",
+    "tier1_date_window_days": 7,
+    "tier1_fx_confidence": "0.950",
+    "tier1_fx_tolerance_bps": 10,
+    "tier2_date_window_days": 30,
+    "tier3_autocommit_confidence": "0.900",
+    "tier3_concurrency": 8
+  },
+  "feedback_loop": {
+    "after": {
+      "by_class": {
+        "h_feedback": {
+          "found": 16,
+          "missed": 0
+        }
+      },
+      "evaluated": 16,
+      "found": 16,
+      "k": 10,
+      "mean_candidates_offered": 10.0,
+      "missed": [],
+      "recall_at_k": 1.0,
+      "truncated_searches": 0,
+      "winning_source_counts": {
+        "resolved_pair": 16
+      }
+    },
+    "available": true,
+    "before": {
+      "by_class": {
+        "h_feedback": {
+          "found": 0,
+          "missed": 16
+        }
+      },
+      "evaluated": 16,
+      "found": 0,
+      "k": 10,
+      "mean_candidates_offered": 10.0,
+      "missed": [
+        "TXN-2026-07-00100",
+        "TXN-2026-07-00101",
+        "TXN-2026-07-00131",
+        "TXN-2026-07-00136",
+        "TXN-2026-07-00137",
+        "TXN-2026-07-00138",
+        "TXN-2026-07-00139",
+        "TXN-2026-07-00155",
+        "TXN-2026-07-00160",
+        "TXN-2026-07-00161",
+        "TXN-2026-07-00162",
+        "TXN-2026-07-00163",
+        "TXN-2026-07-00164",
+        "TXN-2026-07-00170",
+        "TXN-2026-07-00173",
+        "TXN-2026-07-00176"
+      ],
+      "recall_at_k": 0.0,
+      "truncated_searches": 0,
+      "winning_source_counts": {}
+    },
+    "corrections_written_back": 32,
+    "lines_scored": 16,
+    "period": "2026-07"
+  },
+  "full_cascade": {
+    "adjudicator": "anthropic",
+    "by_tier": {
+      "0": {
+        "committed": 660,
+        "correct": 660,
+        "false_positives": 0,
+        "precision": 1.0,
+        "tier": 0
+      },
+      "1": {
+        "committed": 328,
+        "correct": 328,
+        "false_positives": 0,
+        "precision": 1.0,
+        "tier": 1
+      },
+      "3": {
+        "committed": 66,
+        "correct": 66,
+        "false_positives": 0,
+        "precision": 1.0,
+        "tier": 3
+      }
+    },
+    "cache_hit_rate": 0.9324530218384967,
+    "cache_read_tokens": 381888,
+    "cache_write_tokens": 14976,
+    "committed": 1054,
+    "cost_micro": 1522730,
+    "cost_micro_per_1000_lines": 1267885,
+    "decision_mix": {
+      "insufficient_evidence": 97,
+      "match": 45,
+      "no_match": 44,
+      "split_match": 26
+    },
+    "full_population": {
+      "by_class": {
+        "h_batch": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 2,
+          "true_positive": 26
+        },
+        "h_dup_amount": {
+          "correct_restraint": 28,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 0
+        },
+        "h_fee_netted": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 27,
+          "true_positive": 1
+        },
+        "h_feedback": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 32,
+          "true_positive": 0
+        },
+        "h_fx": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 1,
+          "true_positive": 19
+        },
+        "h_narrative_only": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 20
+        },
+        "h_no_match": {
+          "correct_restraint": 20,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 0
+        },
+        "h_partial": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 36,
+          "true_positive": 0
+        },
+        "h_transposed_ref": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 28
+        },
+        "t0_rent_exact": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 480
+        },
+        "t0_supplier_exact": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 180
+        },
+        "t1_recurring_fee": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 6
+        },
+        "t1_standing_order": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 70
+        },
+        "t1_unique_counterparty": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 224
+        }
+      },
+      "committed": 1054,
+      "correct_restraint": 48,
+      "escalation_rate": 0.12166666666666667,
+      "false_positives": 0,
+      "missed": 98,
+      "precision": 1.0,
+      "recall": 0.9149305555555556,
+      "total": 1200,
+      "true_positives": 1054,
+      "wrong_commits": []
+    },
+    "golden": {
+      "by_class": {
+        "h_batch": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 2,
+          "true_positive": 11
+        },
+        "h_dup_amount": {
+          "correct_restraint": 13,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 0
+        },
+        "h_fee_netted": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 12,
+          "true_positive": 1
+        },
+        "h_feedback": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 17,
+          "true_positive": 0
+        },
+        "h_fx": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 10
+        },
+        "h_narrative_only": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 10
+        },
+        "h_no_match": {
+          "correct_restraint": 10,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 0
+        },
+        "h_partial": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 21,
+          "true_positive": 0
+        },
+        "h_transposed_ref": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 13
+        },
+        "t0_rent_exact": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 89
+        },
+        "t0_supplier_exact": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 33
+        },
+        "t1_recurring_fee": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 3
+        },
+        "t1_standing_order": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 14
+        },
+        "t1_unique_counterparty": {
+          "correct_restraint": 0,
+          "false_positive": 0,
+          "missed": 0,
+          "true_positive": 41
+        }
+      },
+      "committed": 225,
+      "correct_restraint": 23,
+      "escalation_rate": 0.25,
+      "false_positives": 0,
+      "missed": 52,
+      "precision": 1.0,
+      "recall": 0.8122743682310469,
+      "total": 300,
+      "true_positives": 225,
+      "wrong_commits": []
+    },
+    "input_tokens": 409552,
+    "latency_p50_ms": 3419,
+    "latency_p95_ms": 4693,
+    "model_calls": 212,
+    "model_version": "claude-sonnet-5",
+    "output_tokens": 58989,
+    "prompt_version": "c724fc91fd1dcd5b",
+    "run_id": "e2a26490-6591-49aa-9f96-a2e6ea0bd252"
+  },
+  "git_dirty": true,
+  "git_sha": "27d3848",
+  "golden_set_size": 300,
+  "period": "2026-06",
+  "population_size": 1200,
+  "retrieval": [
+    {
+      "available": true,
+      "by_class": {
+        "h_batch": {
+          "found": 28,
+          "missed": 0
+        },
+        "h_dup_amount": {
+          "found": 28,
+          "missed": 0
+        },
+        "h_fee_netted": {
+          "found": 28,
+          "missed": 0
+        },
+        "h_feedback": {
+          "found": 0,
+          "missed": 32
+        },
+        "h_fx": {
+          "found": 20,
+          "missed": 0
+        },
+        "h_narrative_only": {
+          "found": 20,
+          "missed": 0
+        },
+        "h_partial": {
+          "found": 33,
+          "missed": 3
+        }
+      },
+      "escalated_population": 212,
+      "evaluated": 192,
+      "found": 157,
+      "k": 10,
+      "key": "windows_only",
+      "label": "Windows + subset-sum (no retrieval)",
+      "mean_candidates_offered": 6.2,
+      "missed": [
+        "TXN-2026-06-00405",
+        "TXN-2026-06-00663",
+        "TXN-2026-06-00664",
+        "TXN-2026-06-00740",
+        "TXN-2026-06-00741",
+        "TXN-2026-06-00742",
+        "TXN-2026-06-00743",
+        "TXN-2026-06-00753",
+        "TXN-2026-06-00813",
+        "TXN-2026-06-00814",
+        "TXN-2026-06-00815",
+        "TXN-2026-06-00900",
+        "TXN-2026-06-00967",
+        "TXN-2026-06-00968",
+        "TXN-2026-06-00969",
+        "TXN-2026-06-00980",
+        "TXN-2026-06-01021",
+        "TXN-2026-06-01022",
+        "TXN-2026-06-01023",
+        "TXN-2026-06-01024",
+        "TXN-2026-06-01061",
+        "TXN-2026-06-01062",
+        "TXN-2026-06-01063",
+        "TXN-2026-06-01064",
+        "TXN-2026-06-01065",
+        "TXN-2026-06-01068",
+        "TXN-2026-06-01088",
+        "TXN-2026-06-01089",
+        "TXN-2026-06-01090",
+        "TXN-2026-06-01091",
+        "TXN-2026-06-01098",
+        "TXN-2026-06-01099",
+        "TXN-2026-06-01100",
+        "TXN-2026-06-01111",
+        "TXN-2026-06-01121"
+      ],
+      "recall_at_k": 0.8177083333333334,
+      "truncated_searches": 7,
+      "winning_source_counts": {
+        "amount_window": 68,
+        "counterparty_window": 109,
+        "subset_sum": 28
+      }
+    },
+    {
+      "available": true,
+      "by_class": {
+        "h_batch": {
+          "found": 27,
+          "missed": 1
+        },
+        "h_dup_amount": {
+          "found": 28,
+          "missed": 0
+        },
+        "h_fee_netted": {
+          "found": 28,
+          "missed": 0
+        },
+        "h_feedback": {
+          "found": 0,
+          "missed": 32
+        },
+        "h_fx": {
+          "found": 20,
+          "missed": 0
+        },
+        "h_narrative_only": {
+          "found": 20,
+          "missed": 0
+        },
+        "h_partial": {
+          "found": 35,
+          "missed": 1
+        }
+      },
+      "escalated_population": 212,
+      "evaluated": 192,
+      "found": 158,
+      "k": 10,
+      "key": "hybrid",
+      "label": "Windows + subset-sum + hybrid retrieval",
+      "mean_candidates_offered": 9.11,
+      "missed": [
+        "TXN-2026-06-00405",
+        "TXN-2026-06-00663",
+        "TXN-2026-06-00664",
+        "TXN-2026-06-00686",
+        "TXN-2026-06-00740",
+        "TXN-2026-06-00741",
+        "TXN-2026-06-00742",
+        "TXN-2026-06-00743",
+        "TXN-2026-06-00809",
+        "TXN-2026-06-00813",
+        "TXN-2026-06-00814",
+        "TXN-2026-06-00815",
+        "TXN-2026-06-00900",
+        "TXN-2026-06-00967",
+        "TXN-2026-06-00968",
+        "TXN-2026-06-00969",
+        "TXN-2026-06-01021",
+        "TXN-2026-06-01022",
+        "TXN-2026-06-01023",
+        "TXN-2026-06-01024",
+        "TXN-2026-06-01061",
+        "TXN-2026-06-01062",
+        "TXN-2026-06-01063",
+        "TXN-2026-06-01064",
+        "TXN-2026-06-01065",
+        "TXN-2026-06-01088",
+        "TXN-2026-06-01089",
+        "TXN-2026-06-01090",
+        "TXN-2026-06-01091",
+        "TXN-2026-06-01098",
+        "TXN-2026-06-01099",
+        "TXN-2026-06-01100",
+        "TXN-2026-06-01111",
+        "TXN-2026-06-01121"
+      ],
+      "recall_at_k": 0.8229166666666666,
+      "truncated_searches": 7,
+      "winning_source_counts": {
+        "amount_window": 68,
+        "counterparty_window": 111,
+        "hybrid_open": 130,
+        "subset_sum": 27
+      }
+    }
+  ],
+  "seed": 20260601,
+  "tenant": "harborview"
+}

@@ -29,6 +29,7 @@ from recon.graph.persistence import (
     insert_decision,
     insert_human_review,
     record_llm_call,
+    record_run_cost,
 )
 from recon.graph.state import RunState
 from recon.llm.adjudicator import (
@@ -293,6 +294,7 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
         # answer "what did it think on the day". It also made a paused run
         # report zero escalations while its queue held 185.
         with transaction() as conn:
+            record_run_cost(conn, state["run_id"], deps.meter.spent_micro)
             for item in queue:
                 item["escalation_decision_id"] = insert_decision(
                     conn,
@@ -404,8 +406,14 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                     "tier": 4,
                     "decision": decision,
                     "confidence": "1.000",
-                    "rationale": resolution.get(
-                        "note", f"Confirmed by {resolution.get('reviewer', 'reviewer')}."
+                    # `.get("note", default)` returns None when the key is
+                    # present and null, which is exactly what the UI sends for
+                    # an empty note -- and `rationale` is NOT NULL, so the
+                    # insert failed and the whole resume rolled back. `or` is
+                    # the operator that actually wanted using here.
+                    "rationale": (
+                        resolution.get("note")
+                        or f"Confirmed by {resolution.get('reviewer') or 'reviewer'}."
                     ),
                     "evidence": ["human_review"],
                     "auto_committed": False,
@@ -420,7 +428,7 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                 insert_human_review(
                     conn,
                     decision_id,
-                    resolution.get("reviewer", "reviewer"),
+                    resolution.get("reviewer") or "reviewer",
                     action,
                     entry_ids,
                     resolution.get("note"),

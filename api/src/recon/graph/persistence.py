@@ -77,6 +77,17 @@ def create_run(
     )
 
 
+def record_run_cost(conn: Db, run_id: str, cost_micro: int) -> None:
+    """Update spend as it accrues, not only when the run closes.
+
+    A run that pauses for human review can sit at `awaiting_human` for hours.
+    Writing cost only at close meant it reported $0.00 the whole time, which is
+    both wrong on the runs list and useless for noticing a run heading for the
+    ceiling.
+    """
+    conn.execute("update runs set cost_total_micro = %s where id = %s", (cost_micro, run_id))
+
+
 def finish_run(conn: Db, run_id: str, status: str, cost_micro: int) -> None:
     conn.execute(
         "update runs set status = %s, ended_at = now(), cost_total_micro = %s where id = %s",

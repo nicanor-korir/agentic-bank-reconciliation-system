@@ -95,3 +95,40 @@ def test_several_approvals_produce_several_pairs():
         COUNTERPARTIES,
     )
     assert {p.bank_ref for p in pairs} == {"TXN-1", "TXN-2"}
+
+
+# -- resolution field handling --------------------------------------------
+
+
+def _rationale_for(resolution: dict) -> str:
+    """Mirrors what apply_human writes to the NOT NULL rationale column."""
+    return resolution.get("note") or f"Confirmed by {resolution.get('reviewer') or 'reviewer'}."
+
+
+def test_an_explicitly_null_note_still_produces_a_rationale():
+    """`.get(key, default)` returns None when the key is present and null.
+
+    The UI sends `note: null` for an empty box, `rationale` is NOT NULL, and
+    the insert failed -- rolling back the entire resume. `or` is the operator
+    that was actually wanted.
+    """
+    assert (
+        _rationale_for(
+            {"bank_ref": "TXN-1", "action": "approve", "reviewer": "n.korir", "note": None}
+        )
+        == "Confirmed by n.korir."
+    )
+
+
+def test_an_omitted_note_produces_a_rationale():
+    assert _rationale_for({"bank_ref": "TXN-1", "reviewer": "n.korir"}).startswith("Confirmed by")
+
+
+def test_a_supplied_note_becomes_the_rationale():
+    assert _rationale_for({"note": "Confirmed against the remittance advice."}) == (
+        "Confirmed against the remittance advice."
+    )
+
+
+def test_a_null_reviewer_does_not_leak_into_the_rationale():
+    assert _rationale_for({"reviewer": None, "note": None}) == "Confirmed by reviewer."

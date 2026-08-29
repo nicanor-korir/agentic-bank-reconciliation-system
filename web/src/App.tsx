@@ -1,124 +1,162 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+/**
+ * View switcher.
+ *
+ * Four views, one piece of state. No router: this is a single-operator demo
+ * tool, and a URL scheme would be more machinery than the whole app needs.
+ */
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { useCallback, useState } from "react";
+import { SystemBar } from "./components/SystemBar";
+import { RunsView } from "./views/RunsView";
+import { RunDetailView } from "./views/RunDetailView";
+import { QueueView } from "./views/QueueView";
+import { AuditView } from "./views/AuditView";
+import { shortId } from "./shared/format";
 
-/** Shape of `GET /health` on the API. */
-type Health = {
-  status: string;
-  service: string;
-  version: string;
-};
-
-type State =
-  | { kind: "loading" }
-  | { kind: "ok"; health: Health }
-  | { kind: "error"; message: string };
-
-function isHealth(value: unknown): value is Health {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.status === "string" &&
-    typeof candidate.service === "string" &&
-    typeof candidate.version === "string"
-  );
-}
+type View =
+  | { kind: "runs" }
+  | { kind: "run"; runId: string }
+  | { kind: "queue"; runId: string }
+  /** `runId` is kept so "back" returns to where the drill-down was opened. */
+  | { kind: "audit"; bankRef: string; runId: string | null };
 
 export default function App() {
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [view, setView] = useState<View>({ kind: "runs" });
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const openRuns = useCallback(() => setView({ kind: "runs" }), []);
+  const openRun = useCallback((runId: string) => setView({ kind: "run", runId }), []);
+  const openQueue = useCallback((runId: string) => setView({ kind: "queue", runId }), []);
 
-    async function check() {
-      try {
-        const response = await fetch(`${API_URL}/health`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const body: unknown = await response.json();
-        if (!isHealth(body)) {
-          throw new Error("unexpected response shape");
-        }
-        setState({ kind: "ok", health: body });
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setState({
-          kind: "error",
-          message: error instanceof Error ? error.message : "unknown error",
-        });
-      }
-    }
+  const openAudit = useCallback(
+    (bankRef: string) =>
+      setView((current) => ({
+        kind: "audit",
+        bankRef,
+        runId:
+          current.kind === "run" || current.kind === "queue"
+            ? current.runId
+            : current.kind === "audit"
+              ? current.runId
+              : null,
+      })),
+    [],
+  );
 
-    void check();
-    return () => controller.abort();
-  }, []);
+  const leaveAudit = useCallback(
+    (runId: string | null) => (runId === null ? openRuns() : openRun(runId)),
+    [openRun, openRuns],
+  );
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-slate-900">
-      <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-lg font-semibold tracking-tight">Reconciliation</h1>
-        <p className="mt-1 text-sm text-slate-500">API connectivity check</p>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-4">
+            <div>
+              <h1 className="text-base font-semibold tracking-tight">
+                Bank reconciliation
+              </h1>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Deterministic tiers auto-commit what they can defend. Everything else
+                comes here.
+              </p>
+            </div>
+            <Breadcrumbs view={view} onOpenRuns={openRuns} onOpenRun={openRun} />
+          </div>
+          <div className="mt-4">
+            <SystemBar />
+          </div>
+        </div>
+      </header>
 
-        <dl className="mt-6 space-y-3 text-sm">
-          <Row label="API">
-            <span className="font-mono text-slate-500">{API_URL}</span>
-          </Row>
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {view.kind === "runs" && <RunsView onOpenRun={openRun} />}
 
-          {state.kind === "loading" && (
-            <Row label="Status">
-              <span className="font-mono text-slate-500">checking…</span>
-            </Row>
-          )}
+        {view.kind === "run" && (
+          <RunDetailView
+            key={view.runId}
+            runId={view.runId}
+            onBack={openRuns}
+            onOpenQueue={openQueue}
+            onOpenAudit={openAudit}
+          />
+        )}
 
-          {state.kind === "error" && (
-            <>
-              <Row label="Status">
-                <span className="font-mono font-medium text-red-600">
-                  unreachable
-                </span>
-              </Row>
-              <Row label="Detail">
-                <span className="font-mono text-slate-500">{state.message}</span>
-              </Row>
-            </>
-          )}
+        {view.kind === "queue" && (
+          <QueueView
+            key={view.runId}
+            runId={view.runId}
+            onBack={() => openRun(view.runId)}
+            onOpenAudit={openAudit}
+          />
+        )}
 
-          {state.kind === "ok" && (
-            <>
-              <Row label="Status">
-                <span className="font-mono font-medium text-emerald-600">
-                  {state.health.status}
-                </span>
-              </Row>
-              <Row label="Service">
-                <span className="font-mono">{state.health.service}</span>
-              </Row>
-              <Row label="Version">
-                <span className="font-mono">{state.health.version}</span>
-              </Row>
-            </>
-          )}
-        </dl>
-      </section>
-    </main>
+        {view.kind === "audit" && (
+          <AuditView
+            bankRef={view.bankRef}
+            onBack={() => leaveAudit(view.runId)}
+            onLookup={openAudit}
+          />
+        )}
+      </main>
+
+      <footer className="mx-auto max-w-7xl px-6 pb-10">
+        <p className="border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-400">
+          The system proposes matches and writes only to its own tables — it never mutates
+          the ledger. Decisions are append-only and hash-chained; a correction supersedes,
+          it does not overwrite.
+        </p>
+      </footer>
+    </div>
   );
 }
 
-function Row({
-  label,
-  children,
+function Breadcrumbs({
+  view,
+  onOpenRuns,
+  onOpenRun,
 }: {
-  label: string;
-  children: ReactNode;
+  view: View;
+  onOpenRuns: () => void;
+  onOpenRun: (runId: string) => void;
 }) {
+  const crumbs: { label: string; onClick?: () => void }[] = [
+    { label: "Runs", onClick: view.kind === "runs" ? undefined : onOpenRuns },
+  ];
+
+  if (view.kind === "run") {
+    crumbs.push({ label: shortId(view.runId) });
+  }
+  if (view.kind === "queue") {
+    crumbs.push({ label: shortId(view.runId), onClick: () => onOpenRun(view.runId) });
+    crumbs.push({ label: "Exception queue" });
+  }
+  if (view.kind === "audit") {
+    if (view.runId !== null) {
+      const runId = view.runId;
+      crumbs.push({ label: shortId(runId), onClick: () => onOpenRun(runId) });
+    }
+    crumbs.push({ label: `Audit ${view.bankRef || "—"}` });
+  }
+
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="truncate">{children}</dd>
-    </div>
+    <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs">
+      {crumbs.map((crumb, index) => (
+        <span key={`${crumb.label}-${index}`} className="flex items-center gap-2">
+          {index > 0 && <span className="text-slate-300">/</span>}
+          {crumb.onClick === undefined ? (
+            <span className="font-medium text-slate-700">{crumb.label}</span>
+          ) : (
+            <button
+              type="button"
+              onClick={crumb.onClick}
+              className="text-indigo-600 hover:text-indigo-800 hover:underline"
+            >
+              {crumb.label}
+            </button>
+          )}
+        </span>
+      ))}
+    </nav>
   );
 }

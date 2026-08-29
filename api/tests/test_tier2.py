@@ -61,6 +61,13 @@ class FakeIndex:
     def __init__(self, open_hits=(), pair_hits=()):
         self.open_hits = list(open_hits)
         self.pair_hits = list(pair_hits)
+        self.bound: list[int] = []
+
+    def bind(self, bank_line_id):
+        self.bound.append(bank_line_id)
+
+    def flush(self):
+        return 0
 
     def search_open_items(self, tenant, narrative, side, limit):
         return self.open_hits[:limit]

@@ -224,8 +224,15 @@ class StubAdjudicator:
                 "candidate_ids": [],
                 "confidence": 0.3,
                 "rationale": (
-                    f"{len(exact)} candidates match this payment equally well; "
-                    f"nothing in the narrative separates them."
+                    (
+                        f"{len(exact)} candidates match this payment exactly and "
+                        f"nothing offered separates them."
+                    )
+                    if exact
+                    else (
+                        "No candidate matches this payment exactly; every open "
+                        "item offered differs in amount."
+                    )
                 ),
                 "evidence": [],
             }

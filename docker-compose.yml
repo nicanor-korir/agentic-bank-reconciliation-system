@@ -75,6 +75,7 @@ services:
     volumes:
       - ./api/src:/app/src
       - ./api/tests:/app/tests
+      - ./api/migrations:/app/migrations
       - ./data:/data
       - ./evals:/evals
     depends_on:

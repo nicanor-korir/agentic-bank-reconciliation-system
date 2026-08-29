@@ -6,7 +6,7 @@
  */
 
 import { TIER_BAR_CLASS, TIER_LABEL } from "./Badge";
-import { formatInteger, formatPercent } from "../lib/format";
+import { formatInteger, formatPercent } from "../shared/format";
 
 /** Tiers always shown, even at zero — an empty tier is information. */
 const BASE_TIERS = ["0", "1", "3", "4"];

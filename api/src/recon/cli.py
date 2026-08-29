@@ -139,6 +139,13 @@ def _cmd_resume(args: argparse.Namespace) -> int:
     from recon.graph.runner import resume_run
 
     settings = get_settings()
+    if args.continue_after_crash:
+        # No interrupt was raised, so there is nothing to answer -- just carry
+        # on from the last completed node.
+        summary = resume_run(settings, args.run_id, None)
+        _print_run(summary)
+        return 0
+
     if args.resolutions:
         resolutions = json.loads(Path(args.resolutions).read_text())
     elif args.simulate_reviewer:
@@ -218,6 +225,12 @@ def _simulated_resolutions(settings: Any, run_id: str) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def _cmd_replay(args: argparse.Namespace) -> int:
+    from recon.replay import replay
+
+    return replay(get_settings(), args.run_id, args.period)
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
@@ -311,7 +324,18 @@ def main(argv: list[str] | None = None) -> int:
     rs.add_argument("run_id")
     rs.add_argument("--resolutions", help="JSON file of reviewer decisions")
     rs.add_argument("--simulate-reviewer", action="store_true")
+    rs.add_argument(
+        "--continue",
+        dest="continue_after_crash",
+        action="store_true",
+        help="resume a run whose process died mid-flight, from its last checkpoint",
+    )
     rs.set_defaults(fn=_cmd_resume)
+
+    rp = sub.add_parser("replay", help="reproduce a stored run and diff it strictly")
+    rp.add_argument("run_id")
+    rp.add_argument("--period")
+    rp.set_defaults(fn=_cmd_replay)
 
     idx = sub.add_parser("index", help="index open ledger entries into Weaviate")
     idx.add_argument("--rebuild", action="store_true", help="clear the tenant index first")

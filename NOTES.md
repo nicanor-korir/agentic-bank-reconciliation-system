@@ -782,3 +782,128 @@ likely causes.
 `LEDGER_SOURCE`, `DEMO_DATE`, dropping Haiku (still recommended; nothing in the
 cascade calls it), multi-currency, and an `hybrid_alpha` sweep. New and
 blocking a deliverable: the API key above.
+
+---
+
+# Phases 5–6 — Exception queue, replay, demo
+
+Status: **complete**, except the Tier 3 quality measurement still blocked on an
+API key (4.1). 255 tests, `ruff` and `mypy --strict` clean, web app typechecks
+and builds.
+
+## 5.1 What landed
+
+Review loop over HTTP: list/start runs, live progress, the exception queue,
+resolve-and-resume, per-transaction audit drill-down. A React exception queue
+with ranked candidate cards, approve/reject/reassign, a tier breakdown, live SSE
+progress, and an audit timeline that shows superseding explicitly.
+
+Phase 6: `make replay RUN_ID=...` with a strict diff, `make continue` for crash
+recovery, `make demo`, a CAMT.053 parser, and `DEMO.md`.
+
+## 5.2 Verified against the running system
+
+| Claim | Evidence |
+|---|---|
+| Full review loop over HTTP | 185 queued → resolved in one POST → run completed, 0 unresolved |
+| Write-back reaches retrieval | 185 resolved pairs indexed for the tenant |
+| Live progress | SSE streams one frame per graph node, each with its chain hash |
+| Audit drill-down | Two escalations from two runs on one line, plus its model call |
+| Crash recovery | API killed mid-run: 988 decisions survived; `make continue` finished the run with **0 duplicate commits** |
+| **Replay** | **1,015 of 1,015 decisions identical**, three times running |
+| Replay fails when it should | Drifted inputs → `REPLAY FAILED`, exit 1, naming the likely causes |
+| CAMT.053 | CSV → XML → parse produces identical content hashes |
+
+## 5.3 The bug that mattered: replay was only *usually* exact
+
+Replay failed on the demo run with 200 hits and 12 misses, and the 12 had no
+recorded model call at all.
+
+The cause: **Tier 2 computed candidates, and then Tier 3 computed them again.**
+A vector index is eventually consistent, so the same query moments apart can
+return different hits. The recording captured the first call; the model was
+shown the second. Twelve lines out of 212 landed on the wrong side of that gap.
+
+It is a nasty shape of bug. It was intermittent, it only appeared under replay,
+and everything looked correct in isolation — retrieval replayed perfectly when
+tested on its own, which is exactly what sent me looking in the wrong place
+first.
+
+The fix is also the obvious design: **compute candidates once, put them in the
+checkpoint, and adjudicate exactly those.** Replay is now identical on repeated
+attempts, the checkpoint contains what the model actually saw, and the run does
+half as much retrieval as before.
+
+The general lesson, which is worth keeping: *anything that leaves the process is
+not a pure function, and calling it twice is a correctness bug, not an
+inefficiency.*
+
+## 5.4 Retrieval is recorded, and why that changed
+
+Replay originally re-executed Tiers 0–2 in full (0.4a). That broke the moment
+the feedback loop did its job: a human correction written back between the run
+and the replay changes what retrieval returns, so replay compared two different
+worlds and reported drift that was not a regression. On the realistic demo
+ordering — correct on Monday, replay on Tuesday — replay would fail every time.
+
+Retrieval is now recorded and replayed exactly like the model (migration 002).
+The cut is deliberate and worth stating: **deterministic code is re-executed,
+anything that leaves the process is replayed from a recording.** Tiers 0–1, the
+amount and date windows and the subset search all still run for real, because
+that is where replay bugs actually hide.
+
+## 5.5 Contract and correctness defects the UI work surfaced
+
+Building the UI against the API found five real defects, all of the same kind —
+the system reporting something that was not true:
+
+- **Tier 4 was structurally always zero.** `by_tier` counted only
+  auto-committed decisions, and human confirmations deliberately are not. The
+  tier bar could never show the work a reviewer actually did.
+- **A paused run reported 0 escalated while 185 sat in its queue.** The
+  `escalated` row was only written once a human got to the item. Escalating is a
+  decision the system makes *at that moment*, so it is now recorded then — which
+  also means the audit trail can answer "what did it think on the day".
+- **A paused run's status still read `running`**, so a run needing a human was
+  indistinguishable from one still working — the one distinction the queue
+  exists to make.
+- **`POST /runs` returned an id before the row existed**, so a client following
+  it straight to the detail view got a 404.
+- **Three different key conventions for `by_tier`** and two different types for
+  `confidence` across endpoints.
+
+Plus two accessibility defects: clickable table rows that were not focusable or
+keyboard-operable, and candidate buttons with no accessible name — in a list
+whose entire purpose is choosing between them.
+
+And one trap outside the app: the Python `.gitignore` template's bare `lib/`
+silently ignores `web/src/lib/`, so the natural Vite layout would never have been
+committed. Now anchored to `/lib/`.
+
+## 5.6 Design decisions
+
+- **Live progress tails the audit log** rather than being pushed from the graph.
+  The events are already durable and per-node, so a reconnecting client replays
+  the same history and progress cannot report a step the audit trail lacks.
+- **The queue is read from the interrupt payload in the checkpoint**, not a
+  separate table, because that payload is exactly what resume will be applied
+  against. A parallel queue table could drift from what resume expects.
+- **Write-back stores the counterparty, not the invoice**, and only for
+  approvals. A rejection means "none of these", which is useful in an audit
+  trail and actively misleading as retrieval history.
+- **Write-back is best effort.** The decision is already committed, so a
+  retrieval failure costs future recall, never accuracy. Reported, not raised.
+- **Audit events carry a sample of bank refs, not all of them.** One node
+  committed 988, which made the hashed payload enormous and the SSE frame
+  unreadable; the full set is recoverable from `decisions`.
+- **CAMT.053 reads direction from `CdtDbtInd`, not the amount sign** (CAMT
+  amounts are unsigned — reading the amount alone inverts every payment), and
+  matches tags on local name because the namespace URI carries a version.
+- **`make continue` is separate from `make resume`.** A crash left no interrupt
+  to answer; sending a resume value would be answering a question nobody asked.
+
+## 5.7 Still open
+
+The API key (4.1) is the only thing blocking a deliverable. Unchanged
+otherwise: `LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku,
+multi-currency, and a `hybrid_alpha` sweep.

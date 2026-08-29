@@ -40,7 +40,11 @@ from recon.llm.adjudicator import (
 from recon.llm.request import build_request, candidate_id
 from recon.llm.schema import COMMITTABLE, InvalidAdjudicationError
 from recon.matching.cascade import run_deterministic
-from recon.matching.tier2_candidates import CandidateSet
+from recon.matching.tier2_candidates import (
+    CandidateSet,
+    candidate_set_from_dict,
+    candidate_set_to_dict,
+)
 from recon.matching.tier2_candidates import generate as generate_candidates
 from recon.matching.types import BankLine, LedgerEntry, Match
 from recon.retrieval.base import NarrativeIndex
@@ -140,7 +144,7 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
         records = [_match_record(m) for m in result.matches]
         by_tier: dict[str, int] = {}
         for match in result.matches:
-            key = f"tier{match.tier}"
+            key = str(match.tier)
             by_tier[key] = by_tier.get(key, 0) + 1
         _persist(state, records, "deterministic_tiers", {"by_tier": by_tier})
         return {
@@ -157,6 +161,7 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
         sets = generate_candidates(
             unmatched, entries, deps.index, settings.match, state["tenant"], claimed=claimed
         )
+        recorded = deps.index.flush()
         offered = sum(len(s.candidates) for s in sets.values())
         truncated = sum(1 for s in sets.values() if s.subset_truncated)
         _persist(
@@ -169,19 +174,36 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                 # Never silent: a truncated search is a bounded search, and the
                 # difference between "none exists" and "I stopped looking" matters.
                 "truncated_subset_searches": truncated,
+                "retrieval_calls_recorded": recorded,
             },
         )
-        return state
+        return {
+            **state,
+            "candidate_sets": {
+                str(line_id): candidate_set_to_dict(cs) for line_id, cs in sets.items()
+            },
+        }
 
     def adjudicate(state: RunState) -> RunState:
         lines, entries = _load(state)
         by_id = {e.id: e for e in entries}
         wanted = set(state["unmatched_ids"])
         unmatched = sorted((line for line in lines if line.id in wanted), key=lambda line: line.id)
-        claimed = {eid for record in state["decisions"] for eid in record["ledger_entry_ids"]}
-        sets = generate_candidates(
-            unmatched, entries, deps.index, settings.match, state["tenant"], claimed=claimed
-        )
+        # Exactly what Tier 2 produced, taken from the checkpoint.
+        # Regenerating here re-queries an eventually-consistent vector index
+        # and can legitimately return different hits, so the model would be
+        # shown candidates that were never recorded. That is how 12 of 212
+        # lines diverged on replay, and it also did the retrieval work twice.
+        sets = {
+            int(line_id): candidate_set_from_dict(raw)
+            for line_id, raw in (state.get("candidate_sets") or {}).items()
+        }
+        missing = [line for line in unmatched if line.id not in sets]
+        if missing:
+            raise RuntimeError(
+                f"{len(missing)} line(s) reached adjudication with no candidate "
+                f"set; tier2_candidates did not run or its state was lost"
+            )
 
         committed: list[dict[str, Any]] = []
         queue: list[dict[str, Any]] = []
@@ -265,6 +287,29 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                     )
                 )
 
+        # Persist the escalations now, not when somebody eventually reviews
+        # them. Deciding to escalate is a decision the system made at this
+        # moment, and an audit trail that records it only retroactively cannot
+        # answer "what did it think on the day". It also made a paused run
+        # report zero escalations while its queue held 185.
+        with transaction() as conn:
+            for item in queue:
+                item["escalation_decision_id"] = insert_decision(
+                    conn,
+                    state["run_id"],
+                    state["tenant"],
+                    {
+                        "bank_line_id": item["bank_line_id"],
+                        "ledger_entry_ids": [],
+                        "tier": 4,
+                        "decision": "escalated",
+                        "confidence": Decimal(str(item.get("confidence", "0.000"))),
+                        "rationale": item.get("rationale") or "Escalated for human review.",
+                        "evidence": item.get("evidence", []),
+                        "auto_committed": False,
+                    },
+                )
+
         matched = {r["bank_line_id"] for r in committed}
         _persist(
             state,
@@ -296,6 +341,16 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
         batch graph, and 200 separate pauses would mean 200 checkpoint
         round-trips to clear one month.
         """
+        # Mark the run as waiting before pausing. Without this the row
+        # still reads "running", so a run that needs a human is
+        # indistinguishable from one still working -- which is the one
+        # distinction the queue exists to make.
+        with transaction() as conn:
+            conn.execute(
+                "update runs set status = 'awaiting_human' where id = %s",
+                (state["run_id"],),
+            )
+
         resolutions = interrupt(
             {
                 "run_id": state["run_id"],
@@ -309,6 +364,12 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
         """Commit human decisions, superseding the escalation they replace."""
         from recon.db import transaction
 
+        with transaction() as conn:
+            conn.execute(
+                "update runs set status = 'running' where id = %s and status = 'awaiting_human'",
+                (state["run_id"],),
+            )
+
         applied: list[dict[str, Any]] = []
         by_ref = {item["bank_ref"]: item for item in state["queue"]}
 
@@ -319,21 +380,11 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                     continue
                 action = resolution["action"]
                 entry_ids = list(resolution.get("ledger_entry_ids", []))
-                escalation_id = insert_decision(
-                    conn,
-                    state["run_id"],
-                    state["tenant"],
-                    {
-                        "bank_line_id": item["bank_line_id"],
-                        "ledger_entry_ids": [],
-                        "tier": 4,
-                        "decision": "escalated",
-                        "confidence": Decimal("0.000"),
-                        "rationale": item.get("rationale") or "Escalated for human review.",
-                        "evidence": item.get("evidence", []),
-                        "auto_committed": False,
-                    },
-                )
+                # The escalation row already exists, written when Tier 3
+                # decided to escalate. Superseding it is the point: the
+                # original judgement stays in the table next to what replaced
+                # it.
+                escalation_id = item.get("escalation_decision_id")
                 decision = (
                     "no_match"
                     if action == "reject"

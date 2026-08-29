@@ -7,9 +7,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { createRun, describeError, fetchRuns } from "../lib/api";
-import type { RunSummary } from "../lib/types";
-import { formatInteger, formatMicro, formatTimestamp, shortId } from "../lib/format";
+import { createRun, describeError, fetchRuns } from "../shared/api";
+import type { RunSummary } from "../shared/types";
+import { formatInteger, formatMicro, formatTimestamp, shortId } from "../shared/format";
 import { GitSha, StatusBadge, Tag } from "../components/Badge";
 import { Button, Panel, PanelHeader, SectionTitle } from "../components/Panel";
 import { EmptyState, ErrorState, Loading, Notice, StubWarning } from "../components/States";
@@ -88,8 +88,14 @@ export function RunsView({ onOpenRun }: { onOpenRun: (runId: string) => void }) 
               value={period}
               onChange={(event) => setPeriod(event.target.value)}
               placeholder="2026-06"
+              list="known-periods"
               className="w-36 rounded-md border border-slate-300 px-2.5 py-1.5 font-mono text-sm text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             />
+            {/* Suggestions only — the API accepts any period that was ingested. */}
+            <datalist id="known-periods">
+              <option value="2026-06" />
+              <option value="2026-07" />
+            </datalist>
           </label>
 
           <label className="block">
@@ -179,8 +185,21 @@ export function RunsView({ onOpenRun }: { onOpenRun: (runId: string) => void }) 
                 {runs.map((run) => (
                   <tr
                     key={run.id}
+                    // A clickable row that is not focusable is invisible to
+                    // keyboard and assistive tech. Given a whole row is the
+                    // target, it needs the role, a tab stop, and the keys a
+                    // button would answer to.
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open run ${shortId(run.id)}`}
                     onClick={() => onOpenRun(run.id)}
-                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpenRun(run.id);
+                      }
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-2 focus:outline-offset-[-2px] focus:outline-indigo-500"
                   >
                     <Td>
                       <span className="font-mono text-xs text-slate-900">

@@ -41,7 +41,16 @@ class RunService:
     def start(self, period: str, adjudicator: str) -> str:
         import uuid
 
+        from recon.db import transaction
+        from recon.graph.persistence import create_run
+        from recon.graph.runner import load_prompt
+
         run_id = str(uuid.uuid4())
+        # Create the row before returning the id, so a client that follows it
+        # to the detail view never races the worker thread to a 404.
+        _, prompt_version = load_prompt()
+        with transaction() as conn:
+            create_run(conn, run_id, self._settings, prompt_version, adjudicator)
 
         def work() -> None:
             try:

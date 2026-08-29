@@ -55,10 +55,15 @@ def create_run(
     # Which adjudicator produced the decisions is part of the run's identity:
     # a stub run must never be mistaken for a model run in a report.
     config["adjudicator"] = adjudicator
+    # Idempotent: the API inserts the row synchronously before starting the
+    # worker thread, so the id it hands back is resolvable immediately. Without
+    # that, a client that follows the returned id straight to the detail view
+    # gets a 404 for as long as the thread takes to start.
     conn.execute(
         "insert into runs (id, tenant_id, status, config_snapshot, model_version, "
         "prompt_version, git_sha, git_dirty, seed) "
-        "values (%s, %s, 'running', %s, %s, %s, %s, %s, %s)",
+        "values (%s, %s, 'running', %s, %s, %s, %s, %s, %s) "
+        "on conflict (id) do nothing",
         (
             run_id,
             settings.recon_tenant,

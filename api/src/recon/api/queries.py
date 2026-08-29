@@ -43,11 +43,21 @@ def get_run(conn: Db, run_id: str) -> dict[str, Any] | None:
         return None
     run = dict(row)
     tiers = conn.execute(
-        "select tier, count(*) as n from decisions where run_id = %s and auto_committed "
-        "group by tier order by tier",
+        "select tier, auto_committed, count(*) as n from decisions "
+        "where run_id = %s and decision <> 'escalated' "
+        "group by tier, auto_committed order by tier",
         (run_id,),
     ).fetchall()
-    run["by_tier"] = {str(t["tier"]): int(t["n"]) for t in tiers}
+    # Split rather than merged. Human confirmations are deliberately not
+    # auto-committed, so counting only auto-committed rows made Tier 4
+    # structurally always zero -- the tier bar could never show the work a
+    # reviewer actually did.
+    run["by_tier"] = {str(t["tier"]): int(t["n"]) for t in tiers if t["auto_committed"]}
+    run["human_confirmed_by_tier"] = {
+        str(t["tier"]): int(t["n"]) for t in tiers if not t["auto_committed"]
+    }
+    run["auto_committed_total"] = sum(run["by_tier"].values())
+    run["human_confirmed_total"] = sum(run["human_confirmed_by_tier"].values())
     run["adjudicator"] = (run.get("config_snapshot") or {}).get("adjudicator")
     return run
 
@@ -79,7 +89,8 @@ def line_audit(conn: Db, tenant: str, bank_ref: str) -> dict[str, Any] | None:
 
     decisions = conn.execute(
         """
-        select d.id, d.run_id, d.tier, d.decision, d.confidence, d.rationale,
+        select d.id, d.run_id, d.tier, d.decision, d.confidence::text as confidence,
+               d.rationale,
                d.evidence, d.auto_committed, d.supersedes_id, d.created_at,
                d.ledger_entry_ids,
                coalesce(

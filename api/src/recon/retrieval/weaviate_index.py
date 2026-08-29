@@ -150,6 +150,12 @@ class WeaviateIndex:
             if collection.tenants.exists(tenant):
                 collection.tenants.remove(tenant)
 
+    def bind(self, bank_line_id: int) -> None:
+        return None
+
+    def flush(self) -> int:
+        return 0
+
     # -- search -----------------------------------------------------------
 
     def search_open_items(

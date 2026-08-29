@@ -15,8 +15,8 @@ import {
   fetchRunEvents,
   parseRunEvent,
   streamUrl,
-} from "../lib/api";
-import type { RunDetail, RunEvent } from "../lib/types";
+} from "../shared/api";
+import type { RunDetail, RunEvent } from "../shared/types";
 import {
   formatInteger,
   formatMicro,
@@ -25,7 +25,7 @@ import {
   humaniseKey,
   shortHash,
   shortId,
-} from "../lib/format";
+} from "../shared/format";
 import { GitSha, StatusBadge, Tag } from "../components/Badge";
 import {
   Button,
@@ -37,7 +37,7 @@ import {
 } from "../components/Panel";
 import { EmptyState, ErrorState, Loading, Notice, StubWarning } from "../components/States";
 import { TierBar } from "../components/TierBar";
-import { isRecord } from "../lib/parse";
+import { isRecord } from "../shared/parse";
 
 type DetailState =
   | { kind: "loading" }
@@ -106,7 +106,8 @@ export function RunDetailView({
     const merge = (incoming: RunEvent[]) => {
       if (incoming.length === 0) return;
       setEvents((current) => {
-        const bySeq = new Map(current.map((event) => [event.seq, event]));
+        const bySeq = new Map<number, RunEvent>();
+        for (const event of current) bySeq.set(event.seq, event);
         for (const event of incoming) {
           const existing = bySeq.get(event.seq);
           if (existing === undefined) {
@@ -254,6 +255,20 @@ export function RunDetailView({
           {run.error !== null && (
             <Notice tone="danger" title="The run thread reported an error">
               <span className="font-mono">{run.error}</span>
+            </Notice>
+          )}
+
+          {run.status === "awaiting_human" && (
+            <Notice tone="info" title="Paused for human review">
+              <span className="flex flex-wrap items-center gap-3">
+                <span>
+                  The graph is holding at an interrupt. It resumes from this checkpoint
+                  once the queue is resolved — nothing is recomputed.
+                </span>
+                <Button variant="primary" onClick={() => onOpenQueue(runId)}>
+                  Open the exception queue
+                </Button>
+              </span>
             </Notice>
           )}
 

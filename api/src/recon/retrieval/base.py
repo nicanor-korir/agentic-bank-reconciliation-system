@@ -56,9 +56,22 @@ class NarrativeIndex(Protocol):
         self, tenant: str, narrative: str, limit: int
     ) -> list[ResolvedPairHit]: ...
 
+    # Recording hooks. Retrieval is per bank line but the search signatures do
+    # not carry the id, so the caller announces which line it is about; a
+    # recording implementation needs that to key what it stores.
+    def bind(self, bank_line_id: int) -> None: ...
+
+    def flush(self) -> int: ...
+
 
 class NullIndex:
     """Retrieval disabled. The 'rules only' ablation arm runs against this."""
+
+    def bind(self, bank_line_id: int) -> None:
+        return None
+
+    def flush(self) -> int:
+        return 0
 
     def search_open_items(
         self, tenant: str, narrative: str, side: str, limit: int

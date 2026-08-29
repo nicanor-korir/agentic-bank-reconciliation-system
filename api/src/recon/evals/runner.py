@@ -140,6 +140,12 @@ class _SplitIndex:
         self._open_tenant = open_tenant
         self._pair_tenant = pair_tenant
 
+    def bind(self, bank_line_id: int) -> None:
+        return None
+
+    def flush(self) -> int:
+        return 0
+
     def search_open_items(self, tenant: str, narrative: str, side: str, limit: int) -> Any:
         return self._base.search_open_items(self._open_tenant, narrative, side, limit)
 

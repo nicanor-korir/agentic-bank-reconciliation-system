@@ -14,6 +14,7 @@ as overall. Precision is Tier 3's problem.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from recon.config import MatchConfig
 from recon.matching.subset_sum import Subset, find_subsets
@@ -111,6 +112,7 @@ def _for_line(
     tenant: str,
 ) -> CandidateSet:
     result = CandidateSet(bank_line_id=line.id, bank_ref=line.bank_ref)
+    index.bind(line.id)
     tolerance = _tolerance(line.abs_minor, config)
     same_side = [e for e in open_entries if e.side == line.side]
 
@@ -243,3 +245,55 @@ def _for_line(
     )[: config.candidate_limit]
 
     return result
+
+
+# -- serialisation --------------------------------------------------------
+#
+# Candidate sets go into the graph checkpoint so Tier 3 adjudicates exactly
+# what Tier 2 produced. Recomputing them in the next node looked harmless and
+# was not: a vector index is eventually consistent, so the same query moments
+# apart can return different hits, and the request the model actually saw then
+# did not match the retrieval that had been recorded. Twelve of 212 lines
+# diverged on replay because of it.
+
+
+def candidate_to_dict(candidate: Candidate) -> dict[str, Any]:
+    return {
+        "kind": candidate.kind,
+        "ledger_entry_ids": list(candidate.ledger_entry_ids),
+        "doc_refs": list(candidate.doc_refs),
+        "total_minor": candidate.total_minor,
+        "delta_minor": candidate.delta_minor,
+        "sources": list(candidate.sources),
+        "score_milli": candidate.score_milli,
+    }
+
+
+def candidate_from_dict(raw: dict[str, Any]) -> Candidate:
+    return Candidate(
+        kind=str(raw["kind"]),
+        ledger_entry_ids=tuple(int(i) for i in raw["ledger_entry_ids"]),
+        doc_refs=tuple(str(r) for r in raw["doc_refs"]),
+        total_minor=int(raw["total_minor"]),
+        delta_minor=int(raw["delta_minor"]),
+        sources=tuple(str(x) for x in raw["sources"]),
+        score_milli=int(raw["score_milli"]),
+    )
+
+
+def candidate_set_to_dict(candidate_set: CandidateSet) -> dict[str, Any]:
+    return {
+        "bank_line_id": candidate_set.bank_line_id,
+        "bank_ref": candidate_set.bank_ref,
+        "subset_truncated": candidate_set.subset_truncated,
+        "candidates": [candidate_to_dict(c) for c in candidate_set.candidates],
+    }
+
+
+def candidate_set_from_dict(raw: dict[str, Any]) -> CandidateSet:
+    return CandidateSet(
+        bank_line_id=int(raw["bank_line_id"]),
+        bank_ref=str(raw["bank_ref"]),
+        candidates=[candidate_from_dict(c) for c in raw["candidates"]],
+        subset_truncated=bool(raw["subset_truncated"]),
+    )

@@ -19,6 +19,11 @@ class RunState(TypedDict, total=False):
     bank_line_ids: list[int]
     unmatched_ids: list[int]
 
+    # What Tier 2 produced, keyed by bank line id as a string. Checkpointed so
+    # Tier 3 adjudicates exactly these -- see tier2_candidates for why
+    # recomputing them was wrong.
+    candidate_sets: dict[str, Any]
+
     # Committed decisions, as serialisable records.
     decisions: list[dict[str, Any]]
     # Items awaiting a human, each carrying its candidates and the reasoning.

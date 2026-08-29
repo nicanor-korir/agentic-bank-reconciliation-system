@@ -6,9 +6,9 @@
  */
 
 import { useEffect, useState } from "react";
-import { API_URL, describeError, fetchHealth, fetchStats } from "../lib/api";
-import type { Health, Stats } from "../lib/types";
-import { formatInteger } from "../lib/format";
+import { API_URL, describeError, fetchHealth, fetchStats } from "../shared/api";
+import type { Health, Stats } from "../shared/types";
+import { formatInteger } from "../shared/format";
 
 type SystemState =
   | { kind: "loading" }

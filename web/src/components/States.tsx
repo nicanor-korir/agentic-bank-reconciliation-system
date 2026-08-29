@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "./Panel";
-import { API_URL } from "../lib/api";
+import { API_URL } from "../shared/api";
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (

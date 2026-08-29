@@ -28,6 +28,11 @@ from recon.llm.adjudicator import (
     StubAdjudicator,
 )
 from recon.retrieval.base import NarrativeIndex, NullIndex
+from recon.retrieval.recording import (
+    RecordingIndex,
+    ReplayIndex,
+    load_retrieval_recordings,
+)
 
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "llm" / "prompts" / "adjudicate.v1.md"
 
@@ -62,18 +67,47 @@ def choose_adjudicator(settings: Settings, mode: str, replay_of: str | None = No
     return AnthropicAdjudicator(Anthropic(api_key=settings.anthropic_api_key))
 
 
-def build_index(settings: Settings, enabled: bool) -> tuple[NarrativeIndex, Any]:
-    """Returns (index, closer). Weaviate is optional; the run degrades to
-    windows-only retrieval rather than failing."""
+def build_index(
+    settings: Settings,
+    enabled: bool,
+    run_id: str | None = None,
+    replay_of: str | None = None,
+) -> tuple[NarrativeIndex, Any]:
+    """Returns (index, closer).
+
+    On a replay, retrieval is served from the recorded run rather than queried
+    live. A vector store is an input that changes underneath you -- most
+    obviously when a human correction is written back between the run and the
+    replay, which this system does on purpose -- so re-querying it would compare
+    two different worlds and report drift that is not a regression.
+
+    On a live run the real index is wrapped in a recorder, so a future replay
+    has something to serve.
+    """
+    if replay_of:
+        with connect() as conn:
+            recordings = load_retrieval_recordings(conn, replay_of)
+        if not recordings:
+            raise ValueError(
+                f"run {replay_of} recorded no retrieval calls, so it cannot be "
+                f"replayed exactly. Runs created before migration 002 predate "
+                f"retrieval recording."
+            )
+        return ReplayIndex(recordings), None
+
     if not enabled:
         return NullIndex(), None
+
     try:
         from recon.retrieval.weaviate_index import WeaviateIndex
         from recon.retrieval.weaviate_index import connect as weaviate_connect
 
         ctx = weaviate_connect(settings)
         client = ctx.__enter__()
-        return WeaviateIndex(client, settings.match), ctx
+        inner: NarrativeIndex = WeaviateIndex(client, settings.match)
+        if run_id:
+            return RecordingIndex(inner, transaction, run_id), ctx
+        return inner, ctx
     except Exception:
         return NullIndex(), None
 
@@ -88,8 +122,8 @@ def start_run(
 ) -> dict[str, Any]:
     prompt, prompt_version = load_prompt()
     adjudicator = choose_adjudicator(settings, adjudicator_mode, replay_of)
-    index, closer = build_index(settings, use_retrieval)
     run_id = run_id or str(uuid.uuid4())
+    index, closer = build_index(settings, use_retrieval, run_id=run_id, replay_of=replay_of)
 
     with transaction() as conn:
         create_run(conn, run_id, settings, prompt_version, adjudicator.name)
@@ -120,9 +154,20 @@ def start_run(
 
 
 def resume_run(
-    settings: Settings, run_id: str, resolutions: list[dict[str, Any]]
+    settings: Settings, run_id: str, resolutions: list[dict[str, Any]] | None
 ) -> dict[str, Any]:
-    """Resume from the checkpoint with the reviewer's decisions."""
+    """Resume from the checkpoint.
+
+    With resolutions, this answers an `interrupt()` -- the reviewer has decided
+    and the graph continues into `apply_human`.
+
+    With `None`, it resumes a run whose process died mid-flight. The two are
+    genuinely different: a crash left no interrupt to answer, so sending a
+    resume value would be answering a question nobody asked. Passing `None`
+    replays from the last completed node, which is why nodes commit their work
+    and their audit event in one transaction -- everything before the crash is
+    already durable and is not recomputed.
+    """
     prompt, _ = load_prompt()
     with connect() as conn:
         row = conn.execute("select config_snapshot from runs where id = %s", (run_id,)).fetchone()
@@ -131,7 +176,7 @@ def resume_run(
 
     mode = str(row["config_snapshot"].get("adjudicator", "stub"))
     adjudicator = choose_adjudicator(settings, "stub" if mode == "stub" else mode, run_id)
-    index, closer = build_index(settings, True)
+    index, closer = build_index(settings, True, run_id=run_id)
     deps = Deps(
         settings=settings,
         index=index,
@@ -144,7 +189,10 @@ def resume_run(
             checkpointer.setup()
             graph = build_graph(deps, checkpointer)
             config = {"configurable": {"thread_id": run_id}}
-            state = graph.invoke(Command(resume=resolutions), config=config)
+            command: Command[Any] | None = (
+                Command(resume=resolutions) if resolutions is not None else None
+            )
+            state = graph.invoke(command, config=config)
             return _summarise(run_id, state, graph, config)
     finally:
         if closer is not None:
@@ -202,7 +250,9 @@ def _summarise(
         "status": "awaiting_human" if interrupts else state.get("status", "completed"),
         "bank_lines": len(state.get("bank_line_ids", [])),
         "committed": len(decisions),
-        "by_tier": dict(sorted(by_tier.items())),
+        # String keys, like every other endpoint. Three different key
+        # conventions for the same field is a contract defect, not a detail.
+        "by_tier": {str(k): v for k, v in sorted(by_tier.items())},
         "queued_for_human": len(queue),
         "unresolved": len(state.get("unmatched_ids", [])),
         "llm_calls": state.get("llm_calls", 0),

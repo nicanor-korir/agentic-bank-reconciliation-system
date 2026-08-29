@@ -40,7 +40,10 @@ remains a separate, human-authorised step.
 ```bash
 make up      # postgres, weaviate, api, web; applies migrations
 make seed    # generate the seeded dataset, ingest it, build the retrieval index
+make demo    # clean slate, seed, eval and one full run — the client walkthrough
 make run     # execute a reconciliation run through the graph
+make replay RUN_ID=...              # reproduce a stored run, strict diff
+make continue RUN_ID=...            # resume a run whose process died
 make resume RUN_ID=... SIMULATE=1   # resume a paused run
 make eval    # score the golden set, print the ablation table
 make check   # lint, typecheck, tests
@@ -52,10 +55,12 @@ API on http://localhost:8000, web on http://localhost:5173.
 
 ## Status
 
-Phase 4 of 6. The graph, checkpointing, interrupts, audit chain, cost ceiling
-and exact replay are in place and verified. Tier 3 has not yet made a live
-model call — there is no `ANTHROPIC_API_KEY` in this environment, so
-adjudication quality is unmeasured (`NOTES.md` 4.1).
+All six phases complete, with one deliverable blocked: Tier 3 has never made a
+live model call, because there is no `ANTHROPIC_API_KEY` in this environment.
+Adjudication quality is therefore unmeasured (`NOTES.md` 4.1). Everything else
+— the cascade, retrieval, the graph, checkpointing, interrupts, the audit
+chain, the cost ceiling, exact replay and the exception queue — is built and
+verified.
 
 ```
 Tier 0 only (exact reference)          660/1200   55.0%   precision 1.0000   0 false positives
@@ -74,7 +79,8 @@ Feedback loop, next month's processor lines        0.0000 -> 1.0000 after 32
 | 2 | Tiers 0–1, golden set, `make eval` | done |
 | 3 | Weaviate, Tier 2 candidate generation | done |
 | 4 | LangGraph, Tier 3 adjudication, audit chain | done (no API key: see NOTES.md 4.1) |
-| 5 | Interrupts, exception queue UI, write-back | next |
-| 6 | Replay, CAMT.053, demo polish | |
+| 5 | Interrupts, exception queue UI, write-back | done |
+| 6 | Replay, CAMT.053, demo polish | done |
 
-`CLAUDE.md` holds the working contract. `NOTES.md` is the decision log.
+`DEMO.md` is the ten-minute client walkthrough. `CLAUDE.md` holds the working
+contract. `NOTES.md` is the decision log.

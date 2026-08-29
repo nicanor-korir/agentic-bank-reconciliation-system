@@ -6,7 +6,7 @@
  * digits, so it gets its own colour and an explicit sign.
  */
 
-import { formatMinorSigned } from "../lib/format";
+import { formatMinorSigned } from "../shared/format";
 
 export function Money({
   minor,

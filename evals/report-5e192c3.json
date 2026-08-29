@@ -1,0 +1,452 @@
+{
+  "arms": [
+    {
+      "auto_match_rate": 0.55,
+      "auto_matched": 660,
+      "cost_micro_per_1000_lines": 0,
+      "full_population": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 28,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 32,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 20,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 36,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 480
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 180
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 6,
+            "true_positive": 0
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 70,
+            "true_positive": 0
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 224,
+            "true_positive": 0
+          }
+        },
+        "committed": 660,
+        "correct_restraint": 48,
+        "escalation_rate": 0.45,
+        "false_positives": 0,
+        "missed": 492,
+        "precision": 1.0,
+        "recall": 0.5729166666666666,
+        "total": 1200,
+        "true_positives": 660,
+        "wrong_commits": []
+      },
+      "golden": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 13,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 17,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 10,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 21,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 89
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 33
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 3,
+            "true_positive": 0
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 14,
+            "true_positive": 0
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 41,
+            "true_positive": 0
+          }
+        },
+        "committed": 122,
+        "correct_restraint": 23,
+        "escalation_rate": 0.5933333333333334,
+        "false_positives": 0,
+        "missed": 155,
+        "precision": 1.0,
+        "recall": 0.4404332129963899,
+        "total": 300,
+        "true_positives": 122,
+        "wrong_commits": []
+      },
+      "key": "tier0",
+      "label": "Tier 0 only (exact reference)",
+      "latency_p50_ms": null,
+      "latency_p95_ms": null,
+      "ms_per_1000_lines": 8.5,
+      "population": 1200,
+      "tier_counts": {
+        "0": 660
+      },
+      "wall_ms": 10.2
+    },
+    {
+      "auto_match_rate": 0.8233333333333334,
+      "auto_matched": 988,
+      "cost_micro_per_1000_lines": 0,
+      "full_population": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 28,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 28,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 32,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 20,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 20,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 36,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 28
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 480
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 180
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 6
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 70
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 224
+          }
+        },
+        "committed": 988,
+        "correct_restraint": 48,
+        "escalation_rate": 0.17666666666666667,
+        "false_positives": 0,
+        "missed": 164,
+        "precision": 1.0,
+        "recall": 0.8576388888888888,
+        "total": 1200,
+        "true_positives": 988,
+        "wrong_commits": []
+      },
+      "golden": {
+        "by_class": {
+          "h_batch": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_dup_amount": {
+            "correct_restraint": 13,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_fee_netted": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 13,
+            "true_positive": 0
+          },
+          "h_feedback": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 17,
+            "true_positive": 0
+          },
+          "h_fx": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_narrative_only": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 10,
+            "true_positive": 0
+          },
+          "h_no_match": {
+            "correct_restraint": 10,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 0
+          },
+          "h_partial": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 21,
+            "true_positive": 0
+          },
+          "h_transposed_ref": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 13
+          },
+          "t0_rent_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 89
+          },
+          "t0_supplier_exact": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 33
+          },
+          "t1_recurring_fee": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 3
+          },
+          "t1_standing_order": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 14
+          },
+          "t1_unique_counterparty": {
+            "correct_restraint": 0,
+            "false_positive": 0,
+            "missed": 0,
+            "true_positive": 41
+          }
+        },
+        "committed": 193,
+        "correct_restraint": 23,
+        "escalation_rate": 0.3566666666666667,
+        "false_positives": 0,
+        "missed": 84,
+        "precision": 1.0,
+        "recall": 0.6967509025270758,
+        "total": 300,
+        "true_positives": 193,
+        "wrong_commits": []
+      },
+      "key": "tier0_1",
+      "label": "Tiers 0-1 (all deterministic rules)",
+      "latency_p50_ms": null,
+      "latency_p95_ms": null,
+      "ms_per_1000_lines": 44.3,
+      "population": 1200,
+      "tier_counts": {
+        "0": 660,
+        "1": 328
+      },
+      "wall_ms": 53.1
+    }
+  ],
+  "config": {
+    "amount_tolerance_bps": 50,
+    "amount_tolerance_floor_minor": 100,
+    "candidate_limit": 10,
+    "model_version": "claude-sonnet-5",
+    "run_cost_ceiling_micro": 2000000,
+    "subset_max_items": 4,
+    "subset_max_pool": 60,
+    "tier0_confidence": "1.000",
+    "tier0_date_window_days": 2,
+    "tier1_confidence": "0.950",
+    "tier1_date_window_days": 7,
+    "tier1_fx_confidence": "0.950",
+    "tier1_fx_tolerance_bps": 10,
+    "tier2_date_window_days": 30,
+    "tier3_autocommit_confidence": "0.900",
+    "tier3_concurrency": 8
+  },
+  "git_dirty": true,
+  "git_sha": "5e192c3",
+  "golden_set_size": 300,
+  "period": "2026-06",
+  "population_size": 1200,
+  "seed": 20260601,
+  "tenant": "harborview"
+}

@@ -46,7 +46,13 @@ class MatchConfig(BaseModel):
 class Settings(BaseSettings):
     """Environment-derived settings. Never part of a matching decision."""
 
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    # `env_nested_delimiter` makes thresholds overridable as
+    # RECON_MATCH__TIER1_FX_TOLERANCE_BPS=25, which is how the eval is swept
+    # without editing code. Without it such variables are silently ignored --
+    # the sweep appears to run and every arm reports identical numbers.
+    model_config = SettingsConfigDict(
+        env_prefix="", extra="ignore", env_nested_delimiter="__"
+    )
 
     database_url: str = "postgresql://recon:recon@localhost:55432/recon"
     weaviate_url: str = "http://localhost:58080"

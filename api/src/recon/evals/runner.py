@@ -17,10 +17,16 @@ from typing import Any
 from recon.config import Settings
 from recon.db import connect, load_bank_lines, load_ledger_entries
 from recon.evals.ablation import ARMS, run_arm
-from recon.evals.golden import load_all_cases, load_golden
+from recon.evals.golden import GoldenCase, load_all_cases, load_golden
 from recon.evals.metrics import Report, score
+from recon.evals.retrieval_metrics import score_retrieval
+from recon.matching import run_deterministic
+from recon.matching.tier2_candidates import generate as generate_candidates
+from recon.matching.types import BankLine, LedgerEntry
+from recon.retrieval.base import NarrativeIndex, NullIndex, ResolvedPair
 
 DEMO_PERIOD = "2026-06"
+FEEDBACK_PERIOD = "2026-07"
 PRECISION_TARGET = 0.995
 
 
@@ -103,6 +109,9 @@ def run_eval(settings: Settings) -> dict[str, Any]:
             )
         )
 
+    retrieval = _run_retrieval_arms(settings, lines, entries, all_cases)
+    feedback = _run_feedback_arm(settings, entries)
+
     return {
         "git_sha": settings.git_sha,
         "git_dirty": settings.git_dirty,
@@ -113,7 +122,182 @@ def run_eval(settings: Settings) -> dict[str, Any]:
         "population_size": len(all_cases),
         "config": json.loads(settings.match.model_dump_json()),
         "arms": [r.as_dict() for r in results],
+        "retrieval": retrieval,
+        "feedback_loop": feedback,
     }
+
+
+class _SplitIndex:
+    """Open items from the live tenant, resolved pairs from a scratch tenant.
+
+    Lets the feedback measurement add and drop history without touching the
+    real index, and without paying to re-embed 1,776 open items on CPU just to
+    answer one question.
+    """
+
+    def __init__(self, base: Any, open_tenant: str, pair_tenant: str) -> None:
+        self._base = base
+        self._open_tenant = open_tenant
+        self._pair_tenant = pair_tenant
+
+    def search_open_items(self, tenant: str, narrative: str, side: str, limit: int) -> Any:
+        return self._base.search_open_items(self._open_tenant, narrative, side, limit)
+
+    def search_resolved_pairs(self, tenant: str, narrative: str, limit: int) -> Any:
+        return self._base.search_resolved_pairs(self._pair_tenant, narrative, limit)
+
+
+def _run_feedback_arm(settings: Settings, entries: list[LedgerEntry]) -> dict[str, Any]:
+    """Demo point 9, as a number rather than a claim.
+
+    Measures Tier 2 recall on the following month's processor-obscured lines
+    before and after this month's human corrections are written back. These
+    lines carry no invoice reference and name the processor rather than the
+    payer, and the credit arrives net of a processor fee -- so no window can
+    reach them, and resolved history is the only route to a candidate.
+    """
+    data_dir = Path(settings.recon_data_dir)
+    period = FEEDBACK_PERIOD
+    cases = [c for c in load_all_cases(data_dir, period) if c.case_class == "h_feedback"]
+    source_cases = [
+        c for c in load_all_cases(data_dir, DEMO_PERIOD) if c.case_class == "h_feedback"
+    ]
+    if not cases or not source_cases:
+        return {"available": False, "reason": "no feedback cases in the manifest"}
+
+    with connect() as conn:
+        next_month = load_bank_lines(conn, settings.recon_tenant, period)
+        this_month = load_bank_lines(conn, settings.recon_tenant, DEMO_PERIOD)
+
+    det = run_deterministic(next_month, entries, settings.match)
+    line_ids = {line.bank_ref: line.id for line in det.unmatched}
+    scored = [c for c in cases if c.bank_ref in line_ids]
+
+    narratives = {line.bank_ref: line.narrative for line in this_month}
+    by_doc_ref = {e.doc_ref: e for e in entries if e.doc_ref}
+    pairs = [
+        ResolvedPair(
+            bank_ref=c.bank_ref,
+            narrative=narratives[c.bank_ref],
+            counterparty=by_doc_ref[ref].counterparty or "",
+            doc_ref=ref,
+            amount_minor=0,
+        )
+        for c in source_cases
+        if c.bank_ref in narratives
+        for ref in sorted(c.expected_doc_refs)
+        if ref in by_doc_ref
+    ]
+
+    scratch = f"{settings.recon_tenant}--eval-feedback"
+    try:
+        from recon.retrieval.weaviate_index import WeaviateIndex
+        from recon.retrieval.weaviate_index import connect as weaviate_connect
+
+        with weaviate_connect(settings) as client:
+            base = WeaviateIndex(client, settings.match)
+            base.clear(scratch)
+            base.ensure_tenant(scratch)
+
+            def measure() -> dict[str, Any]:
+                index = _SplitIndex(base, settings.recon_tenant, scratch)
+                sets = generate_candidates(
+                    det.unmatched,
+                    entries,
+                    index,
+                    settings.match,
+                    settings.recon_tenant,
+                    claimed=det.claimed_entry_ids,
+                )
+                report = score_retrieval(scored, sets, line_ids, settings.match.candidate_limit)
+                return report.as_dict()
+
+            before = measure()
+            base.index_resolved_pairs(scratch, pairs)
+            after = measure()
+            base.clear(scratch)
+    except Exception as exc:
+        return {"available": False, "reason": f"{type(exc).__name__}: {exc}"[:200]}
+
+    return {
+        "available": True,
+        "period": period,
+        "corrections_written_back": len(pairs),
+        "lines_scored": before["evaluated"],
+        "before": before,
+        "after": after,
+    }
+
+
+def _run_retrieval_arms(
+    settings: Settings,
+    lines: list[BankLine],
+    entries: list[LedgerEntry],
+    all_cases: list[GoldenCase],
+) -> list[dict[str, Any]]:
+    """Tier 2 recall@10 over what the deterministic tiers could not resolve.
+
+    This is the ablation the brief cares about -- rules only versus rules plus
+    retrieval -- measured on the population that actually reaches retrieval.
+    Measuring it over the whole month would drown the signal in lines Tier 0
+    already settled.
+    """
+    deterministic = run_deterministic(lines, entries, settings.match)
+    unmatched = deterministic.unmatched
+    line_ids = {line.bank_ref: line.id for line in unmatched}
+    escalated = [c for c in all_cases if c.bank_ref in line_ids]
+
+    def score_with(index: NarrativeIndex) -> dict[str, Any]:
+        candidate_sets = generate_candidates(
+            unmatched,
+            entries,
+            index,
+            settings.match,
+            settings.recon_tenant,
+            claimed=deterministic.claimed_entry_ids,
+        )
+        report = score_retrieval(
+            escalated, candidate_sets, line_ids, settings.match.candidate_limit
+        )
+        return {
+            "available": True,
+            "escalated_population": len(unmatched),
+            **report.as_dict(),
+        }
+
+    arms: list[dict[str, Any]] = [
+        {
+            "key": "windows_only",
+            "label": "Windows + subset-sum (no retrieval)",
+            **score_with(NullIndex()),
+        }
+    ]
+
+    try:
+        from recon.retrieval.weaviate_index import WeaviateIndex
+        from recon.retrieval.weaviate_index import connect as weaviate_connect
+
+        with weaviate_connect(settings) as client:
+            arms.append(
+                {
+                    "key": "hybrid",
+                    "label": "Windows + subset-sum + hybrid retrieval",
+                    **score_with(WeaviateIndex(client, settings.match)),
+                }
+            )
+    except Exception as exc:
+        # A missing vector store degrades the report, it does not fail the run.
+        # Reported as unavailable rather than as a zero -- a zero would read as
+        # "retrieval added nothing", which is a very different claim.
+        arms.append(
+            {
+                "key": "hybrid",
+                "label": "Windows + subset-sum + hybrid retrieval",
+                "available": False,
+                "reason": f"{type(exc).__name__}: {exc}"[:200],
+            }
+        )
+    return arms
 
 
 def print_report(payload: dict[str, Any]) -> None:
@@ -162,6 +346,45 @@ def print_report(payload: dict[str, Any]) -> None:
             f"  {name:<26} {counts['true_positive']:>8} {counts['false_positive']:>6} "
             f"{counts['correct_restraint']:>9} {counts['missed']:>7}"
         )
+
+    for arm in payload.get("retrieval", []):
+        if not arm.get("available"):
+            print(f"\nTier 2 retrieval -- {arm['label']}: unavailable ({arm['reason']})")
+            continue
+        recall = arm["recall_at_k"]
+        print(f"\nTier 2 -- {arm['label']}")
+        print(f"  escalated population   {arm['escalated_population']}")
+        print(f"  scored (known answer)  {arm['evaluated']}")
+        print(
+            f"  recall@{arm['k']}               "
+            f"{'n/a' if recall is None else f'{recall:.4f}'}"
+            f"   ({arm['found']}/{arm['evaluated']})"
+        )
+        print(f"  mean candidates        {arm['mean_candidates_offered']}")
+        if arm["truncated_searches"]:
+            print(f"  TRUNCATED subset searches: {arm['truncated_searches']}")
+        if arm["winning_source_counts"]:
+            sources = ", ".join(f"{k}={v}" for k, v in arm["winning_source_counts"].items())
+            print(f"  winning sources        {sources}")
+        misses = {k: v["missed"] for k, v in arm["by_class"].items() if v["missed"]}
+        if misses:
+            print(f"  missed by class        {misses}")
+
+    fb = payload.get("feedback_loop") or {}
+    if fb.get("available"):
+        before, after = fb["before"], fb["after"]
+        print(f"\nFeedback loop -- {fb['period']}, processor-obscured lines")
+        print(
+            f"  before any correction        recall@10 {_fmt(before['recall_at_k'])}"
+            f"   ({before['found']}/{before['evaluated']})"
+        )
+        print(
+            f"  after {fb['corrections_written_back']:>3} corrections        "
+            f"recall@10 {_fmt(after['recall_at_k'])}"
+            f"   ({after['found']}/{after['evaluated']})"
+        )
+    elif fb:
+        print(f"\nFeedback loop: unavailable ({fb.get('reason')})")
 
     wrong = final["golden"]["wrong_commits"]
     if wrong:

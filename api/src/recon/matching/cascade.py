@@ -24,6 +24,9 @@ from recon.matching.types import BankLine, LedgerEntry, Match
 class CascadeResult:
     matches: list[Match] = field(default_factory=list)
     unmatched: list[BankLine] = field(default_factory=list)
+    # Entries settled by an earlier tier. Tier 2 must not offer these as
+    # candidates: one open item cannot settle two bank lines.
+    claimed_entry_ids: set[int] = field(default_factory=set)
 
     @property
     def by_tier(self) -> dict[int, int]:
@@ -72,4 +75,5 @@ def run_deterministic(
 
     matched = result.matched_ids
     result.unmatched = [line for line in ordered_lines if line.id not in matched]
+    result.claimed_entry_ids = claimed
     return result

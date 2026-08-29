@@ -32,8 +32,21 @@ class MatchConfig(BaseModel):
     amount_tolerance_bps: int = 50  # 0.50%, covers FX and rounding drift
     amount_tolerance_floor_minor: int = 100  # never tighter than 1.00 USD
     tier2_date_window_days: int = 30
-    subset_max_items: int = 4  # bounded subset-sum for split/batch settlement
-    subset_max_pool: int = 60
+    # Subset-sum runs at two scopes. Deep over a counterparty-scoped pool,
+    # because a batched settlement is a remittance and its invoices share a
+    # payer; shallow over an open pool, because C(60,6) is 50 million
+    # combinations. See matching/subset_sum.py.
+    subset_max_items: int = 6
+    # 24, not 12: one managing agent can be behind more than one remittance in
+    # a month, and a pool truncated by amount silently drops the very invoices
+    # the batch is made of. Measured -- it cost 6 of 13 batch cases at 12.
+    subset_max_pool: int = 24
+    subset_unscoped_max_items: int = 3
+    subset_unscoped_max_pool: int = 40
+    # Hybrid search: 0.0 is pure BM25, 1.0 is pure vector. Bank narratives are
+    # templated machine text, so rare-token overlap (invoice refs, processor
+    # codes, payer names) carries more signal than paraphrase similarity.
+    hybrid_alpha: float = 0.4
 
     # Tier 3 adjudication
     tier3_autocommit_confidence: Decimal = Decimal("0.900")
@@ -50,12 +63,13 @@ class Settings(BaseSettings):
     # RECON_MATCH__TIER1_FX_TOLERANCE_BPS=25, which is how the eval is swept
     # without editing code. Without it such variables are silently ignored --
     # the sweep appears to run and every arm reports identical numbers.
-    model_config = SettingsConfigDict(
-        env_prefix="", extra="ignore", env_nested_delimiter="__"
-    )
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", env_nested_delimiter="__")
 
     database_url: str = "postgresql://recon:recon@localhost:55432/recon"
-    weaviate_url: str = "http://localhost:58080"
+    # The v4 client speaks gRPC as well as HTTP, so both ports are needed.
+    weaviate_host: str = "localhost"
+    weaviate_http_port: int = 58080
+    weaviate_grpc_port: int = 50051
     recon_tenant: str = "harborview"
     recon_seed: int = 20260601
     recon_data_dir: str = "./data"

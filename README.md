@@ -39,7 +39,7 @@ remains a separate, human-authorised step.
 
 ```bash
 make up      # postgres, weaviate, api, web; applies migrations
-make seed    # generate the seeded dataset and ingest it
+make seed    # generate the seeded dataset, ingest it, build the retrieval index
 make eval    # score the golden set, print the ablation table
 make check   # lint, typecheck, tests
 ```
@@ -50,12 +50,17 @@ API on http://localhost:8000, web on http://localhost:5173.
 
 ## Status
 
-Phase 2 of 6. Deterministic matching and the eval harness are in place. There
-is no retrieval or model adjudication yet.
+Phase 3 of 6. Deterministic matching, retrieval and the eval harness are in
+place. There is no model adjudication yet.
 
 ```
 Tier 0 only (exact reference)          660/1200   55.0%   precision 1.0000   0 false positives
 Tiers 0-1 (all deterministic rules)    988/1200   82.3%   precision 1.0000   0 false positives
+
+Tier 2 recall@10 over the 212 escalated lines      0.9875  (excluding cold-start
+                                                            processor lines)
+Feedback loop, next month's processor lines        0.0000 -> 1.0000 after 32
+                                                            human corrections
 ```
 
 | Phase | Scope | State |
@@ -63,8 +68,8 @@ Tiers 0-1 (all deterministic rules)    988/1200   82.3%   precision 1.0000   0 f
 | 0 | Plan, contract, resolved parameters | done |
 | 1 | Stack, migrations, seeded dataset | done |
 | 2 | Tiers 0–1, golden set, `make eval` | done |
-| 3 | Weaviate, Tier 2 candidate generation | next |
-| 4 | LangGraph, Tier 3 adjudication, audit chain | |
+| 3 | Weaviate, Tier 2 candidate generation | done |
+| 4 | LangGraph, Tier 3 adjudication, audit chain | next |
 | 5 | Interrupts, exception queue UI, write-back | |
 | 6 | Replay, CAMT.053, demo polish | |
 

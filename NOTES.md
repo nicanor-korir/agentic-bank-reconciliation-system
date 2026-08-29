@@ -560,3 +560,126 @@ Unchanged: `LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku, the $2.00
 ceiling, multi-currency scope. Tier 2 recall@10 (0.4d) becomes measurable in
 Phase 3 and its definition — correct answer present as a single *or* a
 pre-assembled subset — should be re-confirmed against real retrieval numbers.
+
+---
+
+# Phase 3 — Weaviate + Tier 2
+
+Status: **complete**. 170 tests, `ruff` and `mypy --strict` clean.
+
+## 3.1 Numbers
+
+Deterministic tiers are unchanged (988/1200, precision 1.0000, 0 false
+positives). Tier 2 is measured on the **212 lines that actually reach it**.
+
+| Arm | recall@10 | Mean candidates |
+|---|---|---|
+| Windows + subset-sum, no retrieval | 0.8177 (157/192) | 6.2 |
+| Windows + subset-sum + hybrid retrieval | 0.8229 (158/192) | 9.2 |
+
+**Read that with the class breakdown, not on its own.** 32 of the 34 misses are
+`h_feedback` — processor-obscured lines that carry no reference, name the
+processor rather than the payer, and arrive net of a processor fee. No window
+can bridge that, and they are *supposed* to be unreachable on a cold start.
+Excluding them, recall@10 is **158/160 = 0.9875**, against the brief's 0.95
+floor. The remaining two are one batched settlement and one partial payment.
+
+## 3.2 The feedback loop, as a number
+
+| | recall@10 on the following month's processor-obscured lines |
+|---|---|
+| Before any human correction | **0.0000** (0/16) |
+| After 32 corrections written back | **1.0000** (16/16) |
+
+This is demo point 9, and it is now measured on every `make eval` rather than
+asserted in a slide. It also closes flag 0.4e from Phase 0.
+
+Getting here required changing the dataset. The processor originally settled
+the exact invoice amount, so the amount window found the invoice unaided and
+the write-back moved nothing — the mechanism worked and demonstrated nothing.
+Processor settlements net a fee in reality, so `h_feedback` credits now arrive
+1.80% + $0.30 short. That single change is what turns the loop from a story
+into a measurement.
+
+**What gets written back is the counterparty, not the invoice.** June's invoice
+is closed by July, so remembering "this narrative meant INV-2026-06-0231" is
+worthless next month; remembering "this narrative shape means Cedarbrook
+Holdings" keeps paying off. That distinction is the whole loop, and it is why
+`ResolvedPair` stores a payer.
+
+## 3.3 Four bugs the eval found, in order of nastiness
+
+**1. The subset search stopped at `max_results` and reported itself exhaustive.**
+The post-recursion guard read `len(results) >= max_results` where it needed
+`collect_cap`, so the search ended after the first few hits *in discovery
+order* and set `exhausted=True` anyway. Every ranking rule downstream was
+decorative — the correct answer had already never been found. This single line
+was worth **0.9844 vs 0.9583** recall on its own, and it survived three earlier
+"fixes" of mine that all targeted the wrong layer. It reported `exhausted=True`
+throughout, which is what made it so hard to see: *"no subset exists"* and
+*"I stopped looking"* had become the same answer.
+
+**2. Ranking was applied after truncation.** Cohesion scoring lived in Tier 2,
+downstream of `find_subsets`, which had already trimmed to ten by document
+reference. Re-ranking a list the right answer was dropped from does nothing.
+Cohesion now lives inside the search, before the cut.
+
+**3. Singles and subsets were capped separately.** That returned up to twenty
+candidates against a brief that asks for ten, and let a weak single displace
+the correct combination. Now one ranked list, capped once.
+
+**4. A flat counterparty score cost 10 of 13 fee-netted cases.** A receipt short
+by a wire fee covers ~99% of its invoice and is near-certain; a partial payment
+covers half and is a guess. Scoring both at 700 let exact-sum subsets outrank
+the near-certain single and push it out of the ten. The score is now
+gap-relative on a wide enough scale to separate the two.
+
+The through-line: every one of these was a **ranking or truncation** defect, not
+a retrieval defect, and every one presented as "retrieval cannot find it".
+
+## 3.4 Design decisions
+
+- **Self-hosted `sentence-transformers` sidecar**, not an embedding API. An
+  external API would be faster to wire but breaks "comes up on a laptop with no
+  network config", and would make retrieval quality depend on a vendor's model
+  version that replay cannot pin.
+- **`alpha = 0.4`, weighted toward BM25.** Bank narratives are templated machine
+  text; the signal is rare-token overlap — invoice references, processor codes,
+  payer names — not paraphrase similarity. It is a config knob so the eval can
+  sweep it and the choice can be defended with a number.
+- **Multi-tenancy is enforced, not decorative.** One deployment serves many
+  client entities; a candidate leaking across tenants is a data-protection
+  incident, not a bad match. A query that forgets its tenant fails loudly.
+- **Subset-sum runs at two scopes.** Deep (6 items) over a counterparty-scoped
+  pool because a batched settlement is a remittance whose invoices share a
+  payer; shallow (3 items) over an open pool because C(60,6) is 50 million.
+  This resolves the brief's own conflict between "sum of 2-3 open items" in the
+  Tier 2 spec and "one credit = 6 invoices" in the eval spec.
+- **Same-day cohesion breaks exact-sum ties.** When one agent remits twice in a
+  month, several combinations sum to the target exactly. A remittance covers
+  invoices issued together; an arithmetically equal set stitched from two weeks
+  is a coincidence.
+- **Truncation is reported.** `TRUNCATED subset searches: 7` appears in the
+  table. A silent cap reads as "covered everything".
+- **Tier 2 depends on a protocol, not on Weaviate.** Candidate logic is unit
+  tested without a vector database, and the retrieval-off arm is a swap rather
+  than a reconfiguration.
+
+## 3.5 Operational notes
+
+- `make seed` now also builds the index. Embedding 1,776 open items on CPU takes
+  about three minutes on first run.
+- Batch inserts go through the client's batch helper. A single `insert_many` of
+  ~1,800 objects blows the gRPC deadline because every object is embedded
+  synchronously by the sidecar.
+- The `transformers-inference` image ships neither `wget` nor `curl`, so its
+  healthcheck uses its own Python.
+- The feedback measurement uses a scratch tenant for resolved pairs while
+  reading open items from the live one, so `make eval` stays idempotent and does
+  not pay to re-embed 1,776 items to answer one question.
+
+## 3.6 Still open
+
+`LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku, the $2.00 ceiling,
+multi-currency. New: `hybrid_alpha` is set by argument rather than by sweep —
+worth one eval sweep in Phase 4 now that the harness supports it.

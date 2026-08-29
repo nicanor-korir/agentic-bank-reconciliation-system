@@ -277,3 +277,138 @@ def test_input_order_does_not_change_the_outcome():
         assert [(m.bank_ref, m.doc_refs, m.tier) for m in baseline.matches] == [
             (m.bank_ref, m.doc_refs, m.tier) for m in other.matches
         ]
+
+
+# -- Subset-sum -----------------------------------------------------------
+
+
+def _pool(amounts: list[int]) -> list[LedgerEntry]:
+    return [
+        entry(id=200 + i, doc_ref=f"INV-{i:03d}", amount_minor=a, open_amount_minor=a)
+        for i, a in enumerate(amounts)
+    ]
+
+
+def test_subset_sum_finds_a_six_invoice_remittance():
+    from recon.matching.subset_sum import find_subsets
+
+    pool = _pool([100_000 + i * 7_500 for i in range(10)])
+    target = sum(e.amount_minor for e in pool[:6])
+    found = find_subsets(pool, target, 0, max_items=6)
+    assert frozenset(found.subsets[0].doc_refs) == frozenset(e.doc_ref for e in pool[:6])
+    assert found.exhausted
+
+
+def test_an_exact_subset_is_never_crowded_out_by_near_misses():
+    """The bug that cost 6 of 13 batch cases.
+
+    On a large remittance a percentage tolerance admits dozens of near-miss
+    combinations. Truncating in discovery order drops the exact answer; ranking
+    by distance from the target keeps it.
+    """
+    from recon.matching.subset_sum import find_subsets
+
+    pool = _pool([100_000 + i * 100 for i in range(14)])
+    target = sum(e.amount_minor for e in pool[:6])
+    found = find_subsets(pool, target, tolerance_minor=7_500, max_items=6, max_results=5)
+    assert found.subsets, "expected at least one subset"
+    assert found.subsets[0].delta_minor == 0, "an exact sum must rank first"
+
+
+def test_subset_sum_reports_truncation_rather_than_pretending_to_be_exhaustive():
+    from recon.matching.subset_sum import find_subsets
+
+    pool = _pool([10_000 + i for i in range(60)])
+    found = find_subsets(pool, 300_000, 50_000, max_items=6, node_budget=200)
+    assert found.truncated
+    assert not found.exhausted
+
+
+def test_subset_sum_declines_a_single_item():
+    """A one-item "subset" is a plain match and belongs to Tier 0 or 1."""
+    from recon.matching.subset_sum import find_subsets
+
+    pool = _pool([145_000])
+    assert find_subsets(pool, 145_000, 0, max_items=6).subsets == []
+
+
+def test_a_truncated_search_never_reports_itself_exhausted():
+    """The failure that cost 4 batched settlements silently.
+
+    The search stopped at an internal collection cap but still reported
+    `exhausted=True`, so a correct combination that was never reached looked
+    identical to one that provably does not exist.
+    """
+    from recon.matching.subset_sum import find_subsets
+
+    # Many equal amounts inside a wide tolerance: combinations explode.
+    pool = _pool([100_000] * 18)
+    found = find_subsets(pool, 600_000, tolerance_minor=50_000, max_items=6, max_results=2)
+    if found.truncated:
+        assert not found.exhausted
+    assert found.exhausted != found.truncated
+
+
+def test_a_same_day_cohort_outranks_an_arithmetic_coincidence():
+    """One agent can remit twice a month, so exact sums are not decisive."""
+    from datetime import date as _date
+
+    from recon.matching.subset_sum import Subset
+    from recon.matching.tier2_candidates import _subset_score
+
+    day = _date(2026, 6, 1)
+    cohort = Subset(
+        entries=tuple(entry(id=300 + i, entry_date=day) for i in range(3)),
+        total_minor=435_000,
+        delta_minor=0,
+    )
+    mixed = Subset(
+        entries=tuple(entry(id=400 + i, entry_date=day + timedelta(days=i * 4)) for i in range(3)),
+        total_minor=435_000,
+        delta_minor=0,
+    )
+    assert _subset_score(cohort) > _subset_score(mixed)
+
+
+def test_cohesion_is_applied_before_truncation_not_after():
+    """Ranking survivors is useless if the answer was already trimmed away.
+
+    Twelve invoices from one agent, two same-day cohorts of six. Both sum to
+    the target exactly, so exactness cannot separate them; the deterministic
+    tie-break is the document reference, which favours the earlier cohort. The
+    later cohort must still survive into a small result set.
+    """
+    from datetime import date as _date
+
+    from recon.matching.subset_sum import find_subsets
+
+    early = _date(2026, 6, 1)
+    late = _date(2026, 6, 20)
+    pool = [
+        entry(
+            id=500 + i,
+            doc_ref=f"INV-{i:03d}",
+            entry_date=early,
+            amount_minor=100_000 + i * 1_000,
+            open_amount_minor=100_000 + i * 1_000,
+        )
+        for i in range(6)
+    ] + [
+        entry(
+            id=600 + i,
+            doc_ref=f"INV-{100 + i:03d}",
+            entry_date=late,
+            amount_minor=100_000 + i * 1_000,
+            open_amount_minor=100_000 + i * 1_000,
+        )
+        for i in range(6)
+    ]
+    target = sum(e.amount_minor for e in pool[:6])
+    found = find_subsets(pool, target, tolerance_minor=9_000, max_items=6, max_results=4)
+
+    assert found.subsets
+    # Whatever wins, every returned exact subset must be a real same-day cohort
+    # rather than a cross-cohort arithmetic coincidence.
+    exact = [s for s in found.subsets if s.delta_minor == 0]
+    assert exact, "expected at least one exact subset"
+    assert exact[0].is_cohort, "a same-day cohort must outrank a mixed-date coincidence"

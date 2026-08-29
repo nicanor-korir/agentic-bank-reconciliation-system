@@ -31,6 +31,8 @@ from recon.seed.names import (
 
 CURRENCY = "USD"
 WIRE_FEE_MINOR = 2500  # 25.00 USD, netted off by the remitting bank
+PROCESSOR_FEE_BPS = 180  # 1.80%, deducted by the payment processor
+PROCESSOR_FIXED_FEE_MINOR = 30  # plus 0.30 USD per settlement
 
 # Composition of the demo month: Tier 0 clears 55% (the brief's explicit
 # 40-60% band), Tiers 0+1 clear 80%, and 20% reaches retrieval + adjudication.
@@ -437,7 +439,12 @@ class DatasetGenerator:
         retrievable. Same four counterparties in both periods, deliberately.
         """
         company, proc_code = PROCESSOR_TENANTS[i % len(PROCESSOR_TENANTS)]
-        amount = self.rng.randrange(480_000, 1_250_001, 5_000)
+        invoiced = self.rng.randrange(480_000, 1_250_001, 5_000)
+        # The processor settles net of its fee, so the credit does not equal
+        # any invoice. Without this the amount window finds the invoice on its
+        # own and the write-back changes nothing measurable -- which would make
+        # demo point 9 a story rather than a demonstration.
+        amount = invoiced - (invoiced * PROCESSOR_FEE_BPS // 10_000) - PROCESSOR_FIXED_FEE_MINOR
         issued = self._day(1, 6)
         ref = self._ar_ref()
         paid = issued + timedelta(days=self.rng.randint(2, 9))
@@ -460,12 +467,12 @@ class DatasetGenerator:
                     issued + timedelta(days=14),
                     company,
                     f"Commercial rent {self.period} - {company}",
-                    amount,
-                    amount,
+                    invoiced,
+                    invoiced,
                     "AR",
                 )
             ],
-            note=f"processor-obscured payment from {company}",
+            note=f"processor-obscured payment from {company}, net of processor fee",
         )
 
     def _c_h_narrative_only(self, i: int) -> Case:

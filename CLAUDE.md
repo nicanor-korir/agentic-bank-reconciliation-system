@@ -88,9 +88,11 @@ Phase 1 targets are live. Later ones are declared in the Makefile and fail with 
 |---|---|
 | `make up` | Bring up postgres, weaviate, api, web and apply migrations |
 | `make seed` | Generate the seeded dataset (1,200 + 200 lines over two periods, hard cases planted) and ingest it |
+| `make index` | Rebuild the Weaviate index from Postgres |
 | `make check` | lint + typecheck + tests |
 | `make down` / `make reset` | Stop the stack / stop and destroy data |
-| `make eval` | Run the golden set; print the metrics table, write `evals/report-<git_sha>.json` (Phase 2) |
+| `make eval` | Score the golden set, print the ablation + retrieval tables, write `evals/report-<git_sha>.json` |
+| `make eval-baseline` | Score and record the result as the regression baseline |
 | `make run FILE=...` | Execute a reconciliation run through the graph (Phase 4) |
 | `make replay RUN_ID=...` | Re-run a stored run; strict diff, non-zero exit on any divergence (Phase 6) |
 | `make demo` | Full seeded demo scenario, one command (Phase 6) |

@@ -8,7 +8,7 @@ GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 GIT_DIRTY := $(shell test -n "$$(git status --porcelain 2>/dev/null)" && echo true || echo false)
 EXEC := $(DC) exec -T -e GIT_SHA=$(GIT_SHA) -e GIT_DIRTY=$(GIT_DIRTY) api
 
-.PHONY: help up down logs ps seed reset shell test lint typecheck check run eval eval-baseline replay demo
+.PHONY: help up down logs ps seed index reset shell test lint typecheck check run eval eval-baseline replay demo
 
 help:
 	@grep -E '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -36,9 +36,13 @@ logs: ## Tail all logs
 ps: ## Show service status
 	$(DC) ps
 
-seed: ## Generate the seeded dataset and ingest it
+seed: ## Generate the seeded dataset, ingest it, and build the retrieval index
 	$(EXEC) recon seed
+	$(EXEC) recon index --rebuild
 	$(EXEC) recon stats
+
+index: ## Rebuild the Weaviate index from Postgres
+	$(EXEC) recon index --rebuild
 
 shell: ## psql into the database
 	$(DC) exec postgres psql -U $${POSTGRES_USER:-recon} -d $${POSTGRES_DB:-recon}

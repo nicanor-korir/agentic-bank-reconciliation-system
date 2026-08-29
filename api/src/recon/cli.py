@@ -58,6 +58,26 @@ def _cmd_seed(args: argparse.Namespace) -> int:
     return _cmd_ingest(args)
 
 
+def _cmd_index(args: argparse.Namespace) -> int:
+    """Build the Weaviate index from what is already in Postgres."""
+    from recon.db import connect, load_ledger_entries
+    from recon.retrieval.weaviate_index import WeaviateIndex
+    from recon.retrieval.weaviate_index import connect as weaviate_connect
+
+    settings = get_settings()
+    with connect() as conn:
+        entries = load_ledger_entries(conn, settings.recon_tenant)
+
+    with weaviate_connect(settings) as client:
+        index = WeaviateIndex(client, settings.match)
+        if args.rebuild:
+            index.clear(settings.recon_tenant)
+            print("cleared existing index")
+        count = index.index_open_items(settings.recon_tenant, entries)
+    print(f"indexed {count} open ledger entries for tenant {settings.recon_tenant}")
+    return 0
+
+
 def _cmd_eval(args: argparse.Namespace) -> int:
     from recon.evals.runner import check_regression, print_report, run_eval, write_report
 
@@ -115,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
     seed.add_argument("--out", help="output directory (default: RECON_DATA_DIR)")
     seed.add_argument("--dir", help=argparse.SUPPRESS)
     seed.set_defaults(fn=_cmd_seed)
+
+    idx = sub.add_parser("index", help="index open ledger entries into Weaviate")
+    idx.add_argument("--rebuild", action="store_true", help="clear the tenant index first")
+    idx.set_defaults(fn=_cmd_index)
 
     ev = sub.add_parser("eval", help="score the golden set and write a report")
     ev.add_argument("--evals-dir", help="report directory (default: RECON_EVALS_DIR)")

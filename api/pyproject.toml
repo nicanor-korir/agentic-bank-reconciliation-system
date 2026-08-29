@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.5",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
+    "weaviate-client>=4.10",
 ]
 
 [project.optional-dependencies]

@@ -151,6 +151,37 @@ def resume_run(
             closer.__exit__(None, None, None)
 
 
+def get_queue(settings: Settings, run_id: str) -> list[dict[str, Any]]:
+    """The exception queue for a paused run, read from its checkpoint.
+
+    Read from the checkpoint rather than a table because it is the interrupt
+    payload -- the exact thing the graph will resume against. A separately
+    maintained queue table could drift from what resume actually expects.
+    """
+    prompt, _ = load_prompt()
+    index, closer = build_index(settings, False)
+    deps = Deps(
+        settings=settings,
+        index=index,
+        adjudicator=StubAdjudicator(settings.match.tier3_autocommit_confidence),
+        system_prompt=prompt,
+        meter=CostMeter(settings.match.run_cost_ceiling_micro),
+    )
+    try:
+        with PostgresSaver.from_conn_string(settings.database_url) as checkpointer:
+            graph = build_graph(deps, checkpointer)
+            snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
+            interrupts = getattr(snapshot, "interrupts", ()) or ()
+            if not interrupts:
+                return []
+            payload = getattr(interrupts[0], "value", {}) or {}
+            queue: list[dict[str, Any]] = payload.get("queue", [])
+            return queue
+    finally:
+        if closer is not None:
+            closer.__exit__(None, None, None)
+
+
 def _summarise(
     run_id: str, state: dict[str, Any], graph: Any, config: dict[str, Any]
 ) -> dict[str, Any]:

@@ -88,7 +88,12 @@ def _persist(
             {
                 "node": node,
                 "committed": len(records),
-                "bank_refs": [r["bank_ref"] for r in records],
+                # A sample, not the whole list. One node committed 988 refs,
+                # which made the hashed payload enormous and the SSE frame
+                # unreadable. Nothing is lost: the full set is exactly
+                # `select bank_line_id from decisions where run_id = ...`,
+                # so the event stays a summary and the table stays the record.
+                "sample_bank_refs": [r["bank_ref"] for r in records[:10]],
                 **(extra or {}),
             },
         )
@@ -369,7 +374,7 @@ def make_nodes(deps: Deps) -> dict[str, Any]:
                 {
                     "node": "apply_human",
                     "applied": len(applied),
-                    "bank_refs": [r["bank_ref"] for r in applied],
+                    "sample_bank_refs": [r["bank_ref"] for r in applied[:10]],
                 },
             )
 

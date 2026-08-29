@@ -69,7 +69,7 @@ Batch through the tiers — do **not** run one graph invocation per transaction.
 | Layer | Choice |
 |---|---|
 | Orchestration | LangGraph (Python) — interrupts + durable checkpointing are the demo |
-| LLM | Anthropic API, `claude-sonnet-5` for adjudication — the only call site in the system. (The brief's `claude-sonnet-4-6` is real but older and pricier; Haiku is dropped because the cascade has no classification step and adding one would violate "no LLM in Tiers 0–2".) |
+| LLM | Anthropic API, `claude-sonnet-5` for adjudication — the only call site in the system. Measured: 212 calls per 1,200 lines, precision 1.0000 on 66 commits, $1.27 per 1,000 lines. (The brief's `claude-sonnet-4-6` is real but older and pricier; Haiku is dropped because the cascade has no classification step and adding one would violate "no LLM in Tiers 0–2".) |
 | Vector store | Weaviate (docker) — hybrid BM25+vector, native multi-tenancy per client entity |
 | State / audit | Postgres 16 — checkpointer + append-only event log in one place |
 | API | FastAPI + SSE for live graph progress |
@@ -121,3 +121,40 @@ Built in Phase 2, not at the end — it is a deliverable.
 ## Anti-goals
 
 Do not build: user auth, multi-user roles, real bank API integrations, a chat interface, a settings page, dark mode, ledger write-back, PDF statement OCR, or anything for mobile. Building any of these means drift.
+
+## Measured baseline
+
+Do not regress these without saying so explicitly. Reproduce with
+`make run && make eval RUN=<id>`.
+
+| | |
+|---|---|
+| Auto-matched | 1,054 / 1,200 (87.8%) |
+| Precision, every tier | 1.0000 |
+| False positives | 0 |
+| Model calls | 212 |
+| Cost | $1.27 per 1,000 lines |
+| Tier 2 recall@10 (excl. cold-start processor lines) | 0.9875 |
+| Feedback loop | 0.0000 → 1.0000 |
+| Replay | 1,054 / 1,054 identical |
+
+## Output contract notes
+
+- Strict tool use rejects `minimum`/`maximum` on a `number`. Numeric bounds go
+  in `llm/schema.py::validate`, never in the JSON schema.
+- `insufficient_evidence` **may** name the candidates it could not separate;
+  they are shown to the reviewer and never committed. `no_match` may not.
+- `.get(key, default)` does not help when the key is present and null. Use `or`
+  for fields the UI can send as `null`.
+
+## Documentation map
+
+- `README.md` — what it is, the measured results, the cascade, the demo GIFs.
+- `docs/ARCHITECTURE.md` — the deep dive, with diagrams for the containers,
+  cascade, candidate generation, graph, data model, audit chain, replay and
+  feedback loop.
+- `DEMO.md` — the ten-minute client walkthrough.
+- `NOTES.md` — the decision log, including where this disagrees with the brief.
+
+Mermaid diagrams are parse-checked against Mermaid 11 before committing, not
+eyeballed.

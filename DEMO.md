@@ -16,15 +16,14 @@ Two things to check while it runs:
 
 - The eval table printed **precision 1.0000, 0 false positives**. If it didn't,
   stop and find out why before the meeting.
-- The run finished at `awaiting_human` with **185** in the queue.
+- The run finished at `awaiting_human` with **146** in the queue, adjudicator
+  `anthropic`, cost about **$1.52**.
 
-**One honest caveat to have ready.** With no `ANTHROPIC_API_KEY` set, Tier 3
-runs the *stub* adjudicator — a deterministic placeholder, not a model. The UI
-says so in a banner on every affected view, and the run row records it. The
-graph, cost ceiling, audit chain, interrupts and replay are all real; only the
-judgement is not. If they ask about Tier 3 quality, the honest answer is *"we
-haven't measured it yet — the harness is built and the number is one API key
-away."* Do not narrate the stub's rationales as if a model wrote them.
+**Check `ANTHROPIC_API_KEY` is set.** With it, Tier 3 adjudicates for real and
+the run row records `anthropic`. Without it, Tier 3 falls back to a clearly
+labelled deterministic stub — the UI banners it on every affected view — and you
+must not narrate the stub's rationales as if a model wrote them. The stub cannot
+demonstrate judgement; everything else in the demo is real either way.
 
 ---
 
@@ -43,7 +42,7 @@ Point at the header strip: **1,400 bank lines, 1,776 open ledger entries**.
 Open the run. Point at the **tier breakdown**.
 
 > **Tier 0 clears 660 lines — 55%** — on an exact reference, exact amount, and a
-> two-day window. **Tier 1 clears another 328 — 32%** — on payer, amount and a
+> two-day window. **Tier 1 clears another 328 — 27%** — on payer, amount and a
 > seven-day window. That's **988 of 1,200, with zero model calls and zero cost.**
 >
 > This matters more than the AI does. If the model were the first thing you
@@ -76,10 +75,15 @@ Note the `truncated subset searches 7` chip.
 
 ## 4. "The model only adjudicates what's genuinely ambiguous." *(1 min)*
 
-Point at `tier3_adjudicate`: **calls 212**, not 1,200.
+Point at `tier3_adjudicate`: **calls 212**, not 1,200, and **cost $1.5227**.
 
-> Roughly **one line in six** reaches the model. At list rates for Sonnet that's
-> about **$0.90 per 1,200 lines** — under a dollar to reconcile a month.
+> Roughly **one line in six** reaches the model. That's **$1.52 to reconcile a
+> month — $1.27 per 1,000 lines** — and 93% of the input tokens are served from
+> prompt cache.
+>
+> Of those 212, it committed **66** and got **all 66 right**. It answered
+> *"insufficient evidence"* on **97** — it declined to guess on nearly half of
+> what reached it. That is the number I'd look at hardest if I were you.
 
 ## 5. "Here's one it got right, and why." *(1 min)*
 
@@ -141,7 +145,7 @@ Point at the `written_back` count in the submit summary.
 make replay RUN_ID=<the run id>
 ```
 
-> **1,015 of 1,015 decisions identical.**
+> **1,054 of 1,054 decisions identical.**
 >
 > And note what we're *not* claiming. We don't pretend the model is
 > deterministic — it isn't. Every model call and every retrieval query is
@@ -171,6 +175,10 @@ make eval
 |---|---|---|---|
 | Tier 0 only | 660 / 1200 — 55.0% | 1.0000 | **0** |
 | Tiers 0–1 | 988 / 1200 — 82.3% | 1.0000 | **0** |
+| **Full cascade** | **1054 / 1200 — 87.8%** | **1.0000** | **0** |
+
+Per tier: Tier 0 committed 660 and got 660 right; Tier 1, 328 of 328; Tier 3,
+**66 of 66**.
 
 > Three hundred labelled lines, deliberately enriched with the hard cases, plus
 > every one of the 1,200. The regression gate fails the build on a single false
@@ -182,8 +190,9 @@ make eval
 
 **"What happens when it's wrong?"**
 It escalates. The whole design is built so that being unsure is cheap and being
-wrong is expensive. Zero false positives across 1,200 lines is the evidence, and
-the false-positive count is the eval's headline number.
+wrong is expensive. Zero false positives across 1,200 lines is the evidence, the
+false-positive count is the eval's headline number, and the model itself
+answered *"insufficient evidence"* on 97 of the 212 lines it saw.
 
 **"Does it touch our ledger?"**
 No. It writes only to its own tables. No journal is posted, no invoice closed.
@@ -197,9 +206,10 @@ replaying an old run reproduces it exactly, and a changed prompt is a different
 call, not a silent reuse of an answer to a different question.
 
 **"How much does it cost?"**
-About **$0.90 per 1,200 lines** at list rates, before prompt caching. There's a
-per-run ceiling that halts the graph rather than overspending — demonstrable by
-setting it to zero.
+**$1.52 for a 1,200-line month — $1.27 per 1,000 lines** — measured, with 93% of
+input tokens served from prompt cache. There's a per-run ceiling (default $3.00)
+that halts the graph rather than overspending; demonstrable by setting it to
+zero.
 
 **"How long to run it on our data?"**
 The ingest is a parser swap: CSV today, CAMT.053 XML included, both producing

@@ -907,3 +907,113 @@ committed. Now anchored to `/lib/`.
 The API key (4.1) is the only thing blocking a deliverable. Unchanged
 otherwise: `LEDGER_SOURCE` confirmation, `DEMO_DATE`, dropping Haiku,
 multi-currency, and a `hybrid_alpha` sweep.
+
+---
+
+# Phase 4 revisited — Tier 3 measured against a live model
+
+Status: **the blocked deliverable from 4.1 is closed.** An API key arrived, and
+`claude-sonnet-5` adjudicated the 212 lines the rules could not settle.
+
+## 7.1 The numbers
+
+| Tier | Committed | Correct | Wrong | Precision |
+|---|---|---|---|---|
+| 0 — deterministic exact | 660 | 660 | 0 | **1.0000** |
+| 1 — deterministic structural | 328 | 328 | 0 | **1.0000** |
+| 3 — model adjudication | 66 | 66 | 0 | **1.0000** |
+
+Full month: **1,054 of 1,200 auto-matched (87.8%), precision 1.0000, recall
+0.9149, zero false positives.**
+
+| | |
+|---|---|
+| Model calls | 212 |
+| Tokens | 409,552 in / 58,989 out |
+| Prompt cache | 93.2% of input tokens served from cache |
+| Cost | $1.52 per month, **$1.27 per 1,000 lines** |
+| Latency | p50 3,419 ms, p95 4,693 ms |
+| Replay | **IDENTICAL, 1,054 of 1,054**, no model calls |
+
+The cost estimate history is worth keeping, because it moved twice on evidence:
+$0.60 (1.2, projected from an assumed call count), $0.88 (2.1, after the
+deterministic tiers did better than assumed), $1.27 (measured). The projection
+was low mostly because it assumed fewer output tokens than the model actually
+produces when it explains itself properly.
+
+## 7.2 What the model does with the hard cases
+
+| Answer | Count |
+|---|---|
+| `insufficient_evidence` | **97** |
+| `match` | 45 |
+| `no_match` | 44 |
+| `split_match` | 26 |
+
+**It declined to guess on 97 of 212.** That is the behaviour the whole cascade
+argues for, and it is invisible in a precision number, so the mix is now
+reported. Note also that 71 answers were committable but only 66 committed: five
+came back below the 0.90 threshold, so the threshold is doing real work rather
+than rubber-stamping.
+
+Two real rationales, unedited:
+
+> The narrative labels this a "PART PAYMENT" with no invoice or unit reference,
+> and two open invoices (C1 for Kestrel House, C4 for Lantern Yard) both share
+> the same counterparty, amount, and due month, so the specific invoice being
+> partially paid cannot be determined.
+
+> The bulk BACS remittance from GRANITE LETTINGS exactly matches the sum of all
+> six open GRANITE LETTINGS June rent invoices
+> (415000+320000+320000+212500+150000+130000=1547500), consistent with a bulk
+> remittance narrative.
+
+## 7.3 Three things only a live call could find
+
+**The tool schema was invalid.** Strict tool use rejects `minimum`/`maximum` on
+a `number` outright, with a 400: *"For 'number' type, properties maximum,
+minimum are not supported"*. Every unit test passed against a schema the API
+refuses. The bound moved into `validate()`, which is its proper home anyway —
+the schema guarantees shape, that module guarantees meaning — and a confidence
+outside [0,1] is now rejected rather than clamped, because one above 1 compared
+against the auto-commit threshold would silently decide to commit.
+
+**The output contract was wrong about `insufficient_evidence`.** The model
+returns it *with* the candidate ids it could not separate. My validator rejected
+that and failed 48 of 212 lines on the first live run. Naming the tied
+candidates is more useful to a reviewer than naming nothing, and it is safe
+because `insufficient_evidence` is not committable — so the contract was wrong,
+not the model. `no_match` still may not name a candidate: asserting nothing
+matches while pointing at one is a contradiction that would reach a reviewer as
+a recommendation.
+
+**The cost ceiling default was a guess.** Measured, a 1,200-line month costs
+$1.52, so the $2.00 default left 31% headroom and would trip on a slightly
+larger batch. Raised to $3.00. The ceiling exists to stop a runaway, not to fail
+a normal month.
+
+## 7.4 Two bugs the UI found by exercising the API
+
+**`.get("note", default)` returns `None` when the key is present and null** —
+which is exactly what the UI sends for an empty note box. `rationale` is NOT
+NULL, so the insert failed and rolled back the entire resume. `or` is the
+operator that was actually wanted. The recovery behaved correctly: `make
+continue` re-ran the node from its checkpoint, applied the decision and
+superseded the escalation, with nothing lost or duplicated.
+
+**Cost was only written at close.** A run that pauses for review sits at
+`awaiting_human` for as long as the reviewer takes, and reported $0.00 the whole
+time — wrong on the runs list, and useless for noticing a run heading for the
+ceiling. It is now updated as it accrues.
+
+## 7.5 Documentation
+
+`docs/ARCHITECTURE.md` explains the system with ten Mermaid diagrams: the
+container layout, the cascade, Tier 2's five generators merging into one capped
+list, the graph and its interrupt, the data model, the audit chain, and sequence
+diagrams for replay and the feedback loop. All eleven diagrams in the repo were
+parse-checked against Mermaid 11 rather than eyeballed.
+
+The README carries two real captures — a terminal walkthrough with the actual
+cascade numbers, and the exception queue ending on the audit trail where an
+escalation sits struck through beside the human decision that superseded it.

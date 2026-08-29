@@ -1,2 +1,2 @@
 # agentic-bank-reconciliation-system
-Agentic bank reconciliation with a deterministic-first matching cascade. Rules clear the bulk, hybrid retrieval surfaces candidates, and a model adjudicates only genuine ambiguity
+Agentic bank reconciliation matches bank statement lines against ledger entries, auto-commits only what it can defend in writing, and routes the rest to a human queue with reasoned candidates. Human corrections feed back into retrieval, so it improves per client entity. Built on LangGraph with durable checkpointing, an append-only hash-chained audit log, and a 300-case eval harness.
